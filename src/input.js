@@ -25,17 +25,11 @@ export class InputController {
     // Key states
     this.spaceCharging = false;
     this.spaceChargeTime = 0;
-    this.fineLeftHeld = false;
-    this.fineRightHeld = false;
 
-    // UI Regions (base pixels)
-    this.powerBarRect = { x: 474, y: 52, w: 32, h: 140 };
-    this.shootBtn = { x: 472, y: 198, w: 36, h: 24 };
-    this.spinWidgetRect = { x: 472, y: 236, w: 36, h: 36 };
-
-    // Fine aim buttons at bottom-left outside cushions
-    this.fineLeftBtn = { x: 8, y: 258, w: 20, h: 20 };
-    this.fineRightBtn = { x: 32, y: 258, w: 20, h: 20 };
+    // Perfectly Aligned Right Column Layout
+    this.powerBarRect = { x: 476, y: 62, w: 28, h: 104 };
+    this.shootBtn = { x: 472, y: 188, w: 36, h: 26 };
+    this.spinWidgetRect = { x: 472, y: 228, w: 36, h: 36 };
 
     // Pause / Menu button in Top HUD bar (y=0..46, zero overlap!)
     this.pauseBtn = { x: 8, y: 11, w: 24, h: 24 };
@@ -49,18 +43,7 @@ export class InputController {
     // 1. Aim smoothing
     this.aimAngle = lerpAngle(this.aimAngle, this.targetAimAngle, 0.5);
 
-    // 2. Continuous fine aim when holding buttons/keys
-    const fineRate = (0.04 * Math.PI) / 180;
-    if (this.fineLeftHeld) {
-      this.targetAimAngle -= fineRate;
-      this.aimAngle = this.targetAimAngle;
-    }
-    if (this.fineRightHeld) {
-      this.targetAimAngle += fineRate;
-      this.aimAngle = this.targetAimAngle;
-    }
-
-    // 3. Spacebar power oscillation (smooth 2.0s period)
+    // 2. Spacebar power oscillation (smooth 2.0s period)
     if (this.spaceCharging) {
       this.spaceChargeTime += dt;
       const t = (this.spaceChargeTime % 2.0) / 2.0;
@@ -93,7 +76,7 @@ export class InputController {
     const py = e.y;
 
     if (e.type === "pointerdown") {
-      // Check Pause / Menu button in Top HUD bar (always clickable)
+      // Check Pause / Menu button in Top HUD bar
       if (this.isInside(px, py, this.pauseBtn)) {
         if (typeof onPause === "function") onPause();
         return;
@@ -108,7 +91,7 @@ export class InputController {
         return;
       }
 
-      // Check Dedicated SHOOT Button
+      // Check Dedicated SHOOT / HIT Button
       if (this.isInside(px, py, this.shootBtn)) {
         if (typeof onShoot === "function") {
           onShoot({
@@ -121,18 +104,6 @@ export class InputController {
         return;
       }
 
-      // Check Fine Aim Buttons
-      if (this.isInside(px, py, this.fineLeftBtn)) {
-        this.targetAimAngle -= (0.15 * Math.PI) / 180;
-        this.fineLeftHeld = true;
-        return;
-      }
-      if (this.isInside(px, py, this.fineRightBtn)) {
-        this.targetAimAngle += (0.15 * Math.PI) / 180;
-        this.fineRightHeld = true;
-        return;
-      }
-
       // Check Spin Widget
       if (this.isInside(px, py, this.spinWidgetRect)) {
         this.isDraggingSpin = true;
@@ -140,8 +111,8 @@ export class InputController {
         return;
       }
 
-      // Check Power Bar (interactive slider on right)
-      if (this.isInside(px, py, this.powerBarRect) || (px >= 460 && px <= 512 && py >= 44 && py <= 196)) {
+      // Check Power Bar (interactive column on right)
+      if (this.isInside(px, py, this.powerBarRect) || (px >= 466 && px <= 512 && py >= 50 && py <= 178)) {
         this.isDraggingPower = true;
         this.updatePowerFromBar(py);
         return;
@@ -204,8 +175,6 @@ export class InputController {
         this.targetAimAngle = Math.atan2(pointerPhys.y - cuePhys.y, pointerPhys.x - cuePhys.x);
       }
     } else if (e.type === "pointerup" || e.type === "pointercancel") {
-      if (this.fineLeftHeld) this.fineLeftHeld = false;
-      if (this.fineRightHeld) this.fineRightHeld = false;
       if (this.isDraggingSpin) this.isDraggingSpin = false;
       if (this.isDraggingPower) this.isDraggingPower = false;
       if (this.isDraggingAim) this.isDraggingAim = false;
@@ -365,24 +334,15 @@ export class InputController {
   }
 
   renderControls(ctx, matchState) {
-    // 1. Fine Aim Buttons (◀ ▶) at bottom-left
-    const drawBtn = (btn, text, held) => {
-      ctx.fillStyle = held ? PAL.SLATE : PAL.DARKEST;
-      ctx.fillRect(btn.x, btn.y, btn.w, btn.h);
-      ctx.strokeStyle = held ? PAL.CYAN : PAL.SLATE;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(btn.x, btn.y, btn.w, btn.h);
-      ctx.fillStyle = PAL.WHITE;
-      ctx.font = '8px "Press Start 2P", monospace';
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(text, btn.x + btn.w / 2, btn.y + btn.h / 2 + (held ? 1 : 0));
-    };
+    const colX = 490; // Center axis of right column controls
 
-    drawBtn(this.fineLeftBtn, "<", this.fineLeftHeld);
-    drawBtn(this.fineRightBtn, ">", this.fineRightHeld);
+    // 1. Power Bar Header & Container
+    ctx.fillStyle = PAL.BRASS;
+    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("PWR", colX, 54);
 
-    // 2. Vibrant Power Bar with Neon segments & Power percentage readout
     const bar = this.powerBarRect;
     ctx.fillStyle = PAL.DARKEST;
     ctx.fillRect(bar.x - 2, bar.y - 2, bar.w + 4, bar.h + 4);
@@ -390,20 +350,14 @@ export class InputController {
     ctx.lineWidth = 1;
     ctx.strokeRect(bar.x - 2, bar.y - 2, bar.w + 4, bar.h + 4);
 
-    // Header label: PWR & numeric percentage
-    ctx.fillStyle = PAL.BRASS;
-    ctx.font = '8px "Press Start 2P", monospace';
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("PWR", bar.x + bar.w / 2, bar.y - 8);
-
     const numSegments = 10;
-    const segH = Math.floor((bar.h - 8) / numSegments);
+    const segH = 8;
+    const segGap = 2;
     const activeSegments = Math.round(this.power * numSegments);
 
     for (let s = 0; s < numSegments; s++) {
       const segIndexFromBottom = numSegments - 1 - s;
-      const segY = bar.y + 4 + segIndexFromBottom * (segH + 1);
+      const segY = bar.y + 3 + segIndexFromBottom * (segH + segGap);
       const isActive = s < activeSegments;
 
       let segColor = PAL.DARK;
@@ -418,11 +372,14 @@ export class InputController {
       ctx.fillRect(bar.x + 2, segY, bar.w - 4, segH);
     }
 
-    // Power percentage indicator below slider
+    // Power percentage indicator (cleanly positioned between bar and HIT button)
     ctx.fillStyle = PAL.CYAN;
-    ctx.fillText(`${Math.round(this.power * 100)}%`, bar.x + bar.w / 2, bar.y + bar.h + 8);
+    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${Math.round(this.power * 100)}%`, colX, 176);
 
-    // 3. Dedicated HIT / SHOOT Button
+    // 2. Dedicated HIT / SHOOT Button
     const sb = this.shootBtn;
     ctx.fillStyle = this.isPullingBack ? PAL.RED : PAL.GREEN;
     ctx.fillRect(sb.x, sb.y, sb.w, sb.h);
@@ -435,7 +392,7 @@ export class InputController {
     ctx.textBaseline = "middle";
     ctx.fillText("HIT", sb.x + sb.w / 2, sb.y + sb.h / 2);
 
-    // 4. Spin Control Widget (34x34 cue ball disc)
+    // 3. Spin Control Widget (34x34 cue ball disc)
     const sw = this.spinWidgetRect;
     ctx.fillStyle = PAL.DARKEST;
     ctx.fillRect(sw.x, sw.y, sw.w, sw.h);
@@ -457,7 +414,7 @@ export class InputController {
     ctx.fillStyle = PAL.RED;
     ctx.fillRect(Math.round(markerX - 1.5), Math.round(markerY - 1.5), 3, 3);
 
-    // 5. Ball-in-Hand Ghost Placement Display
+    // 4. Ball-in-Hand Ghost Placement Display
     if (this.isPlacingBallInHand || matchState.phase === "BALL_IN_HAND" || matchState.phase === "PLACE_CUE_BREAK") {
       const gpx = physToPx(this.ballInHandPos.x, this.ballInHandPos.y);
       ctx.strokeStyle = this.ballInHandValid ? PAL.CYAN : PAL.RED;
