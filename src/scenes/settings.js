@@ -35,6 +35,9 @@ export const settingsScene = {
     // Top Header
     renderButton(ctx, this.backBtn, "< BACK", false);
 
+    const isFs = !!document.fullscreenElement;
+    renderButton(ctx, { x: 400, y: 12, w: 100, h: 20 }, isFs ? "WINDOWED" : "FULLSCREEN", false);
+
     ctx.fillStyle = PAL.WHITE;
     ctx.font = '8px "Press Start 2P", monospace';
     ctx.textAlign = "center";
@@ -201,6 +204,17 @@ export const settingsScene = {
     if (e.x >= 12 && e.x <= 72 && e.y >= 12 && e.y <= 32) {
       audio.playSfx("uiSelect");
       go("title");
+      return;
+    }
+
+    // Fullscreen Button
+    if (e.x >= 400 && e.x <= 500 && e.y >= 12 && e.y <= 32) {
+      audio.playSfx("uiSelect");
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
       return;
     }
 

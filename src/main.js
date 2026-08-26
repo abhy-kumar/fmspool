@@ -68,6 +68,15 @@ window.addEventListener("resize", updateViewport);
 window.addEventListener("orientationchange", updateViewport);
 document.addEventListener("fullscreenchange", updateViewport);
 
+// Helper to safely toggle fullscreen via button click without key conflicts
+export function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
 // Screen space -> Base pixel coordinate unprojection (including 90 deg inverse)
 export function screenToBase(clientX, clientY) {
   const r = canvas.getBoundingClientRect();
@@ -127,19 +136,8 @@ canvas.addEventListener("pointercancel", (e) => {
   handlePointer("pointercancel", e);
 });
 
-// Keyboard Event Handlers
+// Keyboard Event Handlers (Dispatched directly to the active scene without global key hijacking)
 window.addEventListener("keydown", (e) => {
-  // F key for fullscreen toggle
-  if ((e.key === "f" || e.key === "F") && !e.ctrlKey && !e.altKey && !e.metaKey) {
-    if (sceneManager.current && sceneManager.current.name !== "settings") {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
-      } else {
-        document.exitFullscreen().catch(() => {});
-      }
-    }
-  }
-
   if (sceneManager.current && typeof sceneManager.current.onKey === "function") {
     sceneManager.current.onKey(e);
   }

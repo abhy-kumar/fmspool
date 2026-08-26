@@ -7,7 +7,7 @@ export class InputController {
   constructor() {
     this.aimAngle = 0;
     this.targetAimAngle = 0;
-    this.power = 0.35;
+    this.power = 0.40;
     this.spin = { x: 0, y: 0 }; // x: side spin (-1..1), y: top/back (-1..1)
 
     // Interaction states
@@ -15,6 +15,8 @@ export class InputController {
     this.isDraggingPower = false;
     this.isDraggingSpin = false;
     this.isPullingBack = false;
+    this.pullStartPos = { x: 0, y: 0 };
+    this.pullStartRear = 0;
     this.isPlacingBallInHand = false;
 
     this.ballInHandPos = { x: CFG.HEAD_SPOT.x, y: CFG.HEAD_SPOT.y };
@@ -27,9 +29,9 @@ export class InputController {
     this.fineRightHeld = false;
 
     // UI Regions (base pixels)
-    this.powerBarRect = { x: 476, y: 60, w: 28, h: 130 };
-    this.shootBtn = { x: 474, y: 196, w: 32, h: 22 };
-    this.spinWidgetRect = { x: 470, y: 236, w: 36, h: 36 };
+    this.powerBarRect = { x: 474, y: 52, w: 32, h: 140 };
+    this.shootBtn = { x: 472, y: 198, w: 36, h: 24 };
+    this.spinWidgetRect = { x: 472, y: 236, w: 36, h: 36 };
     this.fineLeftBtn = { x: 8, y: 254, w: 22, h: 22 };
     this.fineRightBtn = { x: 34, y: 254, w: 22, h: 22 };
     this.pauseBtn = { x: 8, y: 8, w: 22, h: 22 };
@@ -40,7 +42,7 @@ export class InputController {
   }
 
   update(dt, matchState) {
-    // 1. Aim smoothing (1-frame exponential filter)
+    // 1. Aim smoothing
     this.aimAngle = lerpAngle(this.aimAngle, this.targetAimAngle, 0.5);
 
     // 2. Continuous fine aim when holding buttons/keys
@@ -72,8 +74,8 @@ export class InputController {
     const rearDist = -(toPointer.x * aimDir.x + toPointer.y * aimDir.y);
     const perpDist = Math.abs(toPointer.x * (-aimDir.y) - toPointer.y * (-aimDir.x));
 
-    const onBall = Math.hypot(toPointer.x, toPointer.y) <= 16;
-    const onStick = rearDist >= 4 && rearDist <= 90 && perpDist <= 22;
+    const onBall = Math.hypot(toPointer.x, toPointer.y) <= 18;
+    const onStick = rearDist >= 2 && rearDist <= 95 && perpDist <= 24;
 
     return onBall || onStick;
   }
@@ -134,24 +136,21 @@ export class InputController {
         return;
       }
 
-      // Check Power Bar
-      if (this.isInside(px, py, this.powerBarRect) || (px >= 468 && px <= 512 && py >= 50 && py <= 194)) {
+      // Check Power Bar (broad interactive area on right)
+      if (this.isInside(px, py, this.powerBarRect) || (px >= 460 && px <= 512 && py >= 44 && py <= 196)) {
         this.isDraggingPower = true;
         this.updatePowerFromBar(py);
         return;
       }
 
-      // Check Cue Stick Pull-Back
+      // Check Cue Stick / Cue Ball Pull-Back
       if (this.isTouchingCueStick(px, py, cue)) {
         this.isPullingBack = true;
+        this.pullStartPos = { x: px, y: py };
         const cuePx = physToPx(cue.x, cue.y);
         const aimDir = fromAngle(this.aimAngle);
         const toPointer = sub({ x: px, y: py }, cuePx);
-        const rearDist = -(toPointer.x * aimDir.x + toPointer.y * aimDir.y);
-        if (rearDist > 6) {
-          const norm = clamp((rearDist - 6) / 120, 0, 1);
-          this.power = clamp(Math.pow(norm, 1.25), 0, CFG.MAX_POWER);
-        }
+        this.pullStartRear = Math.max(0, -(toPointer.x * aimDir.x + toPointer.y * aimDir.y));
         return;
       }
 
@@ -173,13 +172,19 @@ export class InputController {
       } else if (this.isPullingBack && cue && cue.inPlay) {
         const cuePx = physToPx(cue.x, cue.y);
         const aimDir = fromAngle(this.aimAngle);
+
+        // Calculate both absolute rear distance from cue ball AND relative drag delta
         const toPointer = sub({ x: px, y: py }, cuePx);
-        const rearDist = -(toPointer.x * aimDir.x + toPointer.y * aimDir.y);
+        const absRearDist = -(toPointer.x * aimDir.x + toPointer.y * aimDir.y);
         const perpDist = Math.abs(toPointer.x * (-aimDir.y) - toPointer.y * (-aimDir.x));
 
-        // When user pushes back toward cue ball (rearDist <= 4) or moves sideways (perpDist > 36)
-        // -> Cancel pull-back and smoothly allow editing aim direction!
-        if (rearDist <= 4 || perpDist > 36) {
+        // Relative delta from where touch started (allows full power anywhere on table, even at edges!)
+        const dragDelta = sub({ x: px, y: py }, this.pullStartPos);
+        const deltaRear = -(dragDelta.x * aimDir.x + dragDelta.y * aimDir.y);
+        const effectiveRear = Math.max(absRearDist, this.pullStartRear + deltaRear);
+
+        // When user pushes stick back to 0 power (effectiveRear <= 4) or drags far sideways
+        if (effectiveRear <= 4 || (perpDist > 42 && deltaRear < 20)) {
           this.power = 0;
           this.isPullingBack = false;
           this.isDraggingAim = true;
@@ -187,9 +192,9 @@ export class InputController {
           const pointerPhys = pxToPhys(px, py);
           this.targetAimAngle = Math.atan2(pointerPhys.y - cuePhys.y, pointerPhys.x - cuePhys.x);
         } else {
-          // Smooth progressive power curve (120px drag travel)
-          const norm = clamp((rearDist - 6) / 120, 0, 1);
-          this.power = clamp(Math.pow(norm, 1.25), 0, CFG.MAX_POWER);
+          // Responsive, calibrated power travel (80px travel for full 100% power)
+          const norm = clamp((effectiveRear - 4) / 80, 0, 1);
+          this.power = clamp(Math.pow(norm, 1.15), 0, CFG.MAX_POWER);
         }
       } else if (this.isDraggingAim && cue && cue.inPlay) {
         const cuePhys = { x: cue.x, y: cue.y };
@@ -220,7 +225,7 @@ export class InputController {
           });
           this.resetSpin();
         } else {
-          this.power = 0.35;
+          this.power = 0.40;
         }
       }
     }
@@ -344,6 +349,7 @@ export class InputController {
   }
 
   renderControls(ctx, matchState) {
+    // 1. Fine Aim Buttons (◀ ▶)
     const drawBtn = (btn, text, held) => {
       ctx.fillStyle = held ? PAL.GREY : PAL.SLATE;
       ctx.fillRect(btn.x, btn.y, btn.w, btn.h);
@@ -360,9 +366,10 @@ export class InputController {
     drawBtn(this.fineLeftBtn, "<", this.fineLeftHeld);
     drawBtn(this.fineRightBtn, ">", this.fineRightHeld);
 
+    // 2. Pause Menu Button (☰)
     ctx.fillStyle = PAL.SLATE;
     ctx.fillRect(this.pauseBtn.x, this.pauseBtn.y, this.pauseBtn.w, this.pauseBtn.h);
-    ctx.strokeStyle = PAL.SILVER;
+    ctx.strokeStyle = PAL.CYAN;
     ctx.lineWidth = 1;
     ctx.strokeRect(this.pauseBtn.x, this.pauseBtn.y, this.pauseBtn.w, this.pauseBtn.h);
     ctx.fillStyle = PAL.WHITE;
@@ -371,19 +378,22 @@ export class InputController {
     ctx.textBaseline = "middle";
     ctx.fillText("=", this.pauseBtn.x + this.pauseBtn.w / 2, this.pauseBtn.y + this.pauseBtn.h / 2);
 
+    // 3. Vibrant Power Bar with Neon segments & Power percentage readout
     const bar = this.powerBarRect;
-    ctx.fillStyle = PAL.DARK;
+    ctx.fillStyle = PAL.DARKEST;
     ctx.fillRect(bar.x - 2, bar.y - 2, bar.w + 4, bar.h + 4);
-    ctx.strokeStyle = this.isDraggingPower || this.isPullingBack ? PAL.CYAN : PAL.SILVER;
+    ctx.strokeStyle = this.isDraggingPower || this.isPullingBack ? PAL.CYAN : PAL.SLATE;
     ctx.lineWidth = 1;
     ctx.strokeRect(bar.x - 2, bar.y - 2, bar.w + 4, bar.h + 4);
 
-    ctx.fillStyle = PAL.SILVER;
+    // Header label: PWR & numeric percentage
+    ctx.fillStyle = PAL.BRASS;
     ctx.font = '8px "Press Start 2P", monospace';
     ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
     ctx.fillText("PWR", bar.x + bar.w / 2, bar.y - 8);
 
-    const numSegments = 8;
+    const numSegments = 10;
     const segH = Math.floor((bar.h - 8) / numSegments);
     const activeSegments = Math.round(this.power * numSegments);
 
@@ -392,17 +402,23 @@ export class InputController {
       const segY = bar.y + 4 + segIndexFromBottom * (segH + 1);
       const isActive = s < activeSegments;
 
-      let segColor = PAL.DARKEST;
+      let segColor = PAL.DARK;
       if (isActive) {
-        if (s <= 2) segColor = PAL.GREEN;
-        else if (s <= 5) segColor = PAL.YELLOW;
-        else segColor = PAL.RED;
+        if (s <= 3) segColor = PAL.GREEN;        // Emerald Green (0..40%)
+        else if (s <= 6) segColor = PAL.YELLOW;  // Gold (40..70%)
+        else if (s <= 8) segColor = PAL.ORANGE;  // Orange (70..90%)
+        else segColor = PAL.RED;                 // Blazing Crimson (90..100%)
       }
 
       ctx.fillStyle = segColor;
       ctx.fillRect(bar.x + 2, segY, bar.w - 4, segH);
     }
 
+    // Power percentage indicator below slider
+    ctx.fillStyle = PAL.CYAN;
+    ctx.fillText(`${Math.round(this.power * 100)}%`, bar.x + bar.w / 2, bar.y + bar.h + 8);
+
+    // 4. Dedicated HIT / SHOOT Button
     const sb = this.shootBtn;
     ctx.fillStyle = this.isPullingBack ? PAL.RED : PAL.GREEN;
     ctx.fillRect(sb.x, sb.y, sb.w, sb.h);
@@ -415,10 +431,11 @@ export class InputController {
     ctx.textBaseline = "middle";
     ctx.fillText("HIT", sb.x + sb.w / 2, sb.y + sb.h / 2);
 
+    // 5. Spin Control Widget (34x34 cue ball disc)
     const sw = this.spinWidgetRect;
-    ctx.fillStyle = PAL.DARK;
+    ctx.fillStyle = PAL.DARKEST;
     ctx.fillRect(sw.x, sw.y, sw.w, sw.h);
-    ctx.strokeStyle = PAL.SILVER;
+    ctx.strokeStyle = PAL.SLATE;
     ctx.lineWidth = 1;
     ctx.strokeRect(sw.x, sw.y, sw.w, sw.h);
 
@@ -436,6 +453,7 @@ export class InputController {
     ctx.fillStyle = PAL.RED;
     ctx.fillRect(Math.round(markerX - 1.5), Math.round(markerY - 1.5), 3, 3);
 
+    // 6. Ball-in-Hand Ghost Placement Display
     if (this.isPlacingBallInHand || matchState.phase === "BALL_IN_HAND" || matchState.phase === "PLACE_CUE_BREAK") {
       const gpx = physToPx(this.ballInHandPos.x, this.ballInHandPos.y);
       ctx.strokeStyle = this.ballInHandValid ? PAL.CYAN : PAL.RED;

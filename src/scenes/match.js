@@ -91,40 +91,15 @@ export const matchScene = {
       this.state.messageTimer -= dt;
     }
 
-    // 2. Shot Clock
-    if (this.state.phase === "AIMING" || this.state.phase === "CALL_POCKET" || this.state.phase === "BALL_IN_HAND") {
-      this.state.shotClock -= dt;
-      if (this.state.shotClock <= 5 && this.state.shotClock > 0) {
-        if (Math.floor(this.state.shotClock + dt) !== Math.floor(this.state.shotClock)) {
-          audio.playSfx("tick", { pitch: 440 + (5 - Math.floor(this.state.shotClock)) * 60 });
-        }
-      }
-
-      if (this.state.shotClock <= 0) {
-        audio.playSfx("foul");
-        const shooter = this.state.turn;
-        const opponent = shooter === "PLAYER" ? "AI" : "PLAYER";
-        this.state.stats[shooter].fouls++;
-        this.state.turn = opponent;
-        this.state.phase = "BALL_IN_HAND";
-        this.state.ballInHand = true;
-        this.state.ballInHandBehindLine = false;
-        this.state.shotClock = CFG.SHOT_CLOCK_S;
-        this.state.message = "SHOT CLOCK EXPIRED! FOUL";
-        this.state.messageTimer = 2.5;
-        saveMatchSnapshot(this.state, this.tournamentBracket);
-      }
-    }
-
-    // 3. Human Input Update
+    // 2. Human Input Update (No shot clock timer restrictions)
     this.input.update(dt, this.state);
 
-    // 4. AI Turn State Machine
+    // 3. AI Turn State Machine
     if (this.state.turn === "AI") {
       this.updateAITurn(dt);
     }
 
-    // 5. Physics Shot Resolving
+    // 4. Physics Shot Resolving
     if (this.state.phase === "SHOT_RESOLVING") {
       this.shotTimer += dt;
 
@@ -162,7 +137,6 @@ export const matchScene = {
       cue.pocketed = false;
       this.state.phase = "AIMING";
       this.state.ballInHand = false;
-      this.state.shotClock = CFG.SHOT_CLOCK_S;
       this.aiPhase = "IDLE";
       return;
     }
@@ -244,7 +218,6 @@ export const matchScene = {
     if (this.state.phase === "GAME_OVER") {
       this.handleGameOver();
     } else {
-      this.state.shotClock = CFG.SHOT_CLOCK_S;
       saveMatchSnapshot(this.state, this.tournamentBracket);
     }
   },
@@ -345,7 +318,7 @@ export const matchScene = {
       });
     }
 
-    // 3. Render Balls with legal target pulsing halos
+    // 3. Render Balls with halos
     renderBalls(ctx, this.state.balls, this.state);
 
     // 4. Render Aim Assist & Cue Stick
@@ -388,7 +361,7 @@ export const matchScene = {
   renderHUD(ctx) {
     const save = loadSave();
 
-    // HUD Background
+    // HUD Background (Rich dark indigo with bright slate/cyan borders)
     ctx.fillStyle = PAL.DARKEST;
     ctx.fillRect(0, 0, CFG.BASE_W, 46);
     ctx.strokeStyle = PAL.SLATE;
@@ -402,7 +375,6 @@ export const matchScene = {
     ctx.textBaseline = "top";
     ctx.fillText(save.displayName || "PLAYER", 8, 6);
 
-    // Group indicator & remaining balls dots
     const pGroup = this.state.groups.PLAYER;
     if (pGroup) {
       const gBallId = pGroup === "SOLIDS" ? 1 : 9;
@@ -423,7 +395,6 @@ export const matchScene = {
         ctx.strokeRect(dotX, 32, 6, 6);
         dotX += 9;
       }
-      // 8-ball dot
       const eightObj = this.state.balls[8];
       const eightPotted = !eightObj || !eightObj.inPlay;
       ctx.fillStyle = eightPotted ? PAL.DARK : PAL.DARKEST;
@@ -470,44 +441,28 @@ export const matchScene = {
       ctx.fillText("OPEN", CFG.BASE_W - 26, 20);
     }
 
-    // Center: Shot Clock Bar
-    const clockW = 60;
-    const clockH = 6;
-    const clockX = Math.round(CFG.BASE_W / 2 - clockW / 2);
-    const clockY = 6;
-    const clockFrac = clamp(this.state.shotClock / CFG.SHOT_CLOCK_S, 0, 1);
+    // Center: Turn Banner & Game Messages (Large, clear, and unhurried)
+    const msgX = Math.round(CFG.BASE_W / 2);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
 
-    ctx.fillStyle = PAL.DARK;
-    ctx.fillRect(clockX, clockY, clockW, clockH);
-    ctx.strokeStyle = PAL.SLATE;
-    ctx.strokeRect(clockX, clockY, clockW, clockH);
-
-    let clockCol = PAL.GREEN;
-    if (clockFrac < 0.25) clockCol = PAL.RED;
-    else if (clockFrac < 0.5) clockCol = PAL.YELLOW;
-
-    ctx.fillStyle = clockCol;
-    ctx.fillRect(clockX + 1, clockY + 1, Math.round((clockW - 2) * clockFrac), clockH - 2);
-
-    // Message Line with outline
     if (this.state.message && this.state.messageTimer > 0) {
-      const msgX = Math.round(CFG.BASE_W / 2);
-      const msgY = 22;
       ctx.font = '8px "Press Start 2P", monospace';
-      ctx.textAlign = "center";
-      ctx.textBaseline = "top";
-
       ctx.fillStyle = PAL.BLACK;
-      ctx.fillText(this.state.message, msgX + 1, msgY + 1);
-      ctx.fillText(this.state.message, msgX - 1, msgY - 1);
-
+      ctx.fillText(this.state.message, msgX + 1, 15);
       ctx.fillStyle = PAL.YELLOW;
-      ctx.fillText(this.state.message, msgX, msgY);
+      ctx.fillText(this.state.message, msgX, 14);
+    } else {
+      // Show active shooter turn banner
+      const isPlayer = this.state.turn === "PLAYER";
+      ctx.font = '8px "Press Start 2P", monospace';
+      ctx.fillStyle = isPlayer ? PAL.CYAN : PAL.MAGENTA;
+      ctx.fillText(isPlayer ? "YOUR TURN" : `${aiDef.name}'S TURN`, msgX, 14);
     }
   },
 
   renderResultsModal(ctx) {
-    ctx.fillStyle = "rgba(5, 4, 9, 0.88)";
+    ctx.fillStyle = "rgba(10, 8, 20, 0.90)";
     ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
 
     const r = this.resultsData;
@@ -563,15 +518,17 @@ export const matchScene = {
   },
 
   renderPauseModal(ctx) {
-    ctx.fillStyle = "rgba(5, 4, 9, 0.85)";
+    ctx.fillStyle = "rgba(10, 8, 20, 0.88)";
     ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
 
-    renderPanel(ctx, 156, 60, 200, 168, "PAUSED");
+    renderPanel(ctx, 156, 46, 200, 196, "PAUSED");
 
-    renderButton(ctx, { x: 176, y: 86, w: 160, h: 24 }, "RESUME", false);
-    renderButton(ctx, { x: 176, y: 118, w: 160, h: 24 }, "SETTINGS", false);
-    renderButton(ctx, { x: 176, y: 150, w: 160, h: 24 }, "CONCEDE", false);
-    renderButton(ctx, { x: 176, y: 182, w: 160, h: 24 }, "QUIT TO TITLE", false);
+    const isFs = !!document.fullscreenElement;
+    renderButton(ctx, { x: 176, y: 72, w: 160, h: 22 }, "RESUME", false);
+    renderButton(ctx, { x: 176, y: 98, w: 160, h: 22 }, isFs ? "WINDOWED" : "FULLSCREEN", false);
+    renderButton(ctx, { x: 176, y: 124, w: 160, h: 22 }, "SETTINGS", false);
+    renderButton(ctx, { x: 176, y: 150, w: 160, h: 22 }, "CONCEDE", false);
+    renderButton(ctx, { x: 176, y: 176, w: 160, h: 22 }, "QUIT TO TITLE", false);
   },
 
   handlePointer(e) {
@@ -595,19 +552,26 @@ export const matchScene = {
     if (this.pauseOpen) {
       if (e.type !== "pointerdown") return;
       if (e.x >= 176 && e.x <= 336) {
-        if (e.y >= 86 && e.y <= 110) {
+        if (e.y >= 72 && e.y <= 94) {
           audio.playSfx("uiSelect");
           this.pauseOpen = false;
-        } else if (e.y >= 118 && e.y <= 142) {
+        } else if (e.y >= 98 && e.y <= 120) {
+          audio.playSfx("uiSelect");
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => {});
+          } else {
+            document.exitFullscreen().catch(() => {});
+          }
+        } else if (e.y >= 124 && e.y <= 146) {
           audio.playSfx("uiSelect");
           go("settings");
-        } else if (e.y >= 150 && e.y <= 174) {
+        } else if (e.y >= 150 && e.y <= 172) {
           audio.playSfx("foul");
           this.pauseOpen = false;
           this.state.winner = "AI";
           this.state.phase = "GAME_OVER";
           this.handleGameOver();
-        } else if (e.y >= 182 && e.y <= 206) {
+        } else if (e.y >= 176 && e.y <= 198) {
           audio.playSfx("uiSelect");
           clearMatchSnapshot();
           go("title");
@@ -645,7 +609,6 @@ export const matchScene = {
         cue.pocketed = false;
         this.state.phase = "AIMING";
         this.state.ballInHand = false;
-        this.state.shotClock = CFG.SHOT_CLOCK_S;
         audio.playSfx("uiSelect");
         saveMatchSnapshot(this.state, this.tournamentBracket);
       }

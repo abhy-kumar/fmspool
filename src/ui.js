@@ -16,7 +16,7 @@ export function isProfane(text) {
     .replace(/7/g, "t")
     .replace(/\$/g, "s")
     .replace(/@/g, "a")
-    .replace(/(.)\1+/g, "$1"); // Collapse repeats
+    .replace(/(.)\1+/g, "$1");
 
   return BLOCKED_WORDS.some((word) => normalized.includes(word.toLowerCase()));
 }
@@ -25,30 +25,30 @@ export function isProfane(text) {
 export function renderPanel(ctx, x, y, w, h, title = null) {
   // Drop shadow
   ctx.fillStyle = PAL.BLACK;
-  ctx.fillRect(x + 1, y + 1, w, h);
+  ctx.fillRect(x + 2, y + 2, w, h);
 
   // Body fill
-  ctx.fillStyle = PAL.DARK;
+  ctx.fillStyle = PAL.DARKEST;
   ctx.fillRect(x, y, w, h);
 
   // Outer border
-  ctx.strokeStyle = PAL.SILVER;
+  ctx.strokeStyle = PAL.SLATE;
   ctx.lineWidth = 1;
   ctx.strokeRect(x, y, w, h);
 
-  // Inner border
-  ctx.strokeStyle = PAL.SLATE;
+  // Inner border highlight
+  ctx.strokeStyle = PAL.DARK;
   ctx.strokeRect(x + 2, y + 2, w - 4, h - 4);
 
   // Optional Title header banner
   if (title) {
     ctx.fillStyle = PAL.SLATE;
-    ctx.fillRect(x + 2, y + 2, w - 4, 14);
-    ctx.fillStyle = PAL.WHITE;
+    ctx.fillRect(x + 2, y + 2, w - 4, 16);
+    ctx.fillStyle = PAL.BRASS;
     ctx.font = '8px "Press Start 2P", monospace';
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(title, x + w / 2, y + 9);
+    ctx.fillText(title, x + w / 2, y + 10);
   }
 }
 
@@ -59,10 +59,10 @@ export function renderButton(ctx, rect, text, isSelected = false, isPressed = fa
   const w = rect.w;
   const h = rect.h;
 
-  ctx.fillStyle = isSelected ? PAL.GREY : PAL.SLATE;
+  ctx.fillStyle = isSelected ? PAL.SLATE : PAL.DARK;
   ctx.fillRect(x, y, w, h);
 
-  ctx.strokeStyle = isSelected ? PAL.CYAN : PAL.SILVER;
+  ctx.strokeStyle = isSelected ? PAL.CYAN : PAL.SLATE;
   ctx.lineWidth = 1;
   ctx.strokeRect(x, y, w, h);
 
@@ -97,64 +97,63 @@ export class ArcadeKeyboard {
   }
 
   render(ctx, score = null, rank = null) {
-    // Backdrop Panel
-    renderPanel(ctx, 40, 24, 432, 240, "ENTER YOUR INITIALS");
+    ctx.fillStyle = "rgba(10, 8, 20, 0.94)";
+    ctx.fillRect(0, 0, 512, 288);
 
-    // Rank & Score Banner
-    const isShimmer = Math.floor(this.cursorTimer * 4) % 2 === 0;
-    ctx.fillStyle = isShimmer ? PAL.BRASS : PAL.WHITE;
-    ctx.font = '8px "Press Start 2P", monospace';
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    if (rank) {
-      ctx.fillText(`NEW HIGH SCORE! RANK #${rank}`, 256, 46);
-    } else {
-      ctx.fillText("HIGH SCORE RUN COMPLETE", 256, 46);
-    }
+    renderPanel(ctx, 36, 16, 440, 256, "ENTER YOUR NAME");
 
     if (score !== null) {
-      ctx.fillStyle = PAL.CYAN;
-      ctx.fillText(`FINAL SCORE: ${score}`, 256, 60);
+      ctx.fillStyle = PAL.BRASS;
+      ctx.font = '8px "Press Start 2P", monospace';
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`SCORE: ${score}`, 256, 46);
     }
 
-    // Name Input Box
+    if (rank !== null) {
+      ctx.fillStyle = PAL.CYAN;
+      ctx.fillText(`TOP 10 ENTRY! RANK #${rank}`, 256, 62);
+    }
+
+    // Name Display Box
     ctx.fillStyle = PAL.DARKEST;
-    ctx.fillRect(156, 80, 200, 24);
+    ctx.fillRect(136, 78, 240, 30);
     ctx.strokeStyle = PAL.CYAN;
-    ctx.strokeRect(156, 80, 200, 24);
+    ctx.strokeRect(136, 78, 240, 30);
 
     const showCursor = this.cursorTimer < 0.4;
     const displayText = this.name + (showCursor && this.name.length < 12 ? "_" : "");
+
     ctx.fillStyle = PAL.WHITE;
-    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.font = '12px "Press Start 2P", monospace';
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(displayText, 256, 92);
+    ctx.fillText(displayText, 256, 93);
 
-    // Render Keys Grid
+    // Keyboard Grid
     const g = this.gridRect;
     for (let r = 0; r < 4; r++) {
       for (let c = 0; c < 10; c++) {
-        const key = this.keys[r][c];
         const kx = g.x + c * (g.keyW + g.gap);
         const ky = g.y + r * (g.keyH + g.gap);
+        const keyLabel = this.keys[r][c];
 
-        let kColor = PAL.SLATE;
-        let borderCol = PAL.SILVER;
-        if (key === "OK") { kColor = PAL.FELT; borderCol = PAL.GREEN; }
-        else if (key === "DEL") { kColor = PAL.MAROON; borderCol = PAL.RED; }
-        else if (key === "ESC") { kColor = PAL.DARK; borderCol = PAL.GREY; }
+        let isAction = keyLabel === "OK" || keyLabel === "DEL" || keyLabel === "ESC";
+        let btnCol = PAL.DARK;
+        if (keyLabel === "OK") btnCol = PAL.GREEN;
+        else if (keyLabel === "DEL") btnCol = PAL.RED;
+        else if (keyLabel === "ESC") btnCol = PAL.SLATE;
 
-        ctx.fillStyle = kColor;
+        ctx.fillStyle = btnCol;
         ctx.fillRect(kx, ky, g.keyW, g.keyH);
-        ctx.strokeStyle = borderCol;
+        ctx.strokeStyle = PAL.SLATE;
         ctx.strokeRect(kx, ky, g.keyW, g.keyH);
 
         ctx.fillStyle = PAL.WHITE;
         ctx.font = '8px "Press Start 2P", monospace';
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(key, kx + g.keyW / 2, ky + g.keyH / 2);
+        ctx.fillText(keyLabel, kx + g.keyW / 2, ky + g.keyH / 2);
       }
     }
   }
@@ -165,11 +164,11 @@ export class ArcadeKeyboard {
 
     for (let r = 0; r < 4; r++) {
       for (let c = 0; c < 10; c++) {
-        const key = this.keys[r][c];
         const kx = g.x + c * (g.keyW + g.gap);
         const ky = g.y + r * (g.keyH + g.gap);
 
         if (e.x >= kx && e.x <= kx + g.keyW && e.y >= ky && e.y <= ky + g.keyH) {
+          const key = this.keys[r][c];
           this.pressKey(key);
           return;
         }
@@ -179,41 +178,56 @@ export class ArcadeKeyboard {
 
   handleKey(e) {
     if (e.type !== "keydown") return;
+
     if (e.code === "Backspace") {
-      this.pressKey("DEL");
+      audio.playSfx("keyPress");
+      this.name = this.name.slice(0, -1);
     } else if (e.code === "Enter") {
-      this.pressKey("OK");
+      this.confirm();
     } else if (e.code === "Escape") {
-      this.pressKey("ESC");
-    } else if (e.key && e.key.length === 1) {
-      const char = e.key.toUpperCase();
-      if (/^[A-Z0-9_]$/.test(char)) {
-        this.pressKey(char);
+      this.cancel();
+    } else if (e.key && e.key.length === 1 && /[a-zA-Z0-9_]/.test(e.key)) {
+      if (this.name.length < 12) {
+        audio.playSfx("keyPress");
+        this.name = (this.name + e.key.toUpperCase()).slice(0, 12);
       }
     }
   }
 
   pressKey(key) {
     if (key === "DEL") {
-      if (this.name.length > 0) {
-        this.name = this.name.slice(0, -1);
-        audio.playSfx("keyPress");
-      }
+      audio.playSfx("keyPress");
+      this.name = this.name.slice(0, -1);
     } else if (key === "OK") {
-      if (this.name.length >= 3 && !isProfane(this.name)) {
-        audio.playSfx("uiSelect");
-        if (typeof this.onConfirm === "function") this.onConfirm(this.name);
-      } else {
-        audio.playSfx("foul");
-      }
+      this.confirm();
     } else if (key === "ESC") {
-      audio.playSfx("uiMove");
-      if (typeof this.onCancel === "function") this.onCancel();
+      this.cancel();
     } else {
       if (this.name.length < 12) {
-        this.name += key;
         audio.playSfx("keyPress");
+        this.name = (this.name + key).slice(0, 12);
       }
+    }
+  }
+
+  confirm() {
+    audio.playSfx("uiSelect");
+    let finalName = this.name.trim();
+    if (isProfane(finalName)) {
+      finalName = "PLAYER";
+    }
+    if (finalName.length < 3) {
+      finalName = "PLAYER";
+    }
+    if (typeof this.onConfirm === "function") {
+      this.onConfirm(finalName);
+    }
+  }
+
+  cancel() {
+    audio.playSfx("uiSelect");
+    if (typeof this.onCancel === "function") {
+      this.onCancel();
     }
   }
 }

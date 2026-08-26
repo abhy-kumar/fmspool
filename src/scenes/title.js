@@ -164,11 +164,15 @@ export const titleScene = {
     ctx.fillStyle = PAL.YELLOW;
     ctx.fillText(`COINS: ${save.coins || 0}`, 404, CFG.BASE_H - 12);
 
+    // Top Fullscreen Button
+    const isFs = !!document.fullscreenElement;
+    renderButton(ctx, { x: 412, y: 12, w: 88, h: 18 }, isFs ? "WINDOW" : "FULLSCRN", false);
+
     // Offline Tag
     if (getIsOffline()) {
       ctx.fillStyle = PAL.RED;
       ctx.textAlign = "right";
-      ctx.fillText("! OFFLINE", CFG.BASE_W - 8, 14);
+      ctx.fillText("! OFFLINE", 400, 20);
     }
 
     // 5. Difficulty Modal Overlay
@@ -254,6 +258,17 @@ export const titleScene = {
 
   handlePointer(e) {
     if (e.type !== "pointerdown") return;
+
+    // Fullscreen Toggle
+    if (e.x >= 412 && e.x <= 500 && e.y >= 12 && e.y <= 30) {
+      audio.playSfx("uiSelect");
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+      return;
+    }
 
     if (this.howToPlayOpen) {
       if (e.x >= 60 && e.x <= 150 && e.y >= 218 && e.y <= 240) {

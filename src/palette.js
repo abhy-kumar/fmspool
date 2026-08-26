@@ -1,32 +1,42 @@
+// Vibrant Retro Arcade 24-Color Palette
 export const PAL = {
-  BLACK: "#0d0b12",
-  DARKEST: "#16131f",
-  DARK: "#241f31",
-  SLATE: "#3b3450",
-  GREY: "#5c5470",
-  LIGHTGREY: "#8b849d",
-  SILVER: "#c0bcd0",
-  WHITE: "#f4f1ff",
-  FELT_DARK: "#0f4630",
-  FELT: "#14603f",
-  FELT_LIGHT: "#1a7a4e",
-  FELT_HI: "#249660",
-  RAIL_DARK: "#3a2114",
-  RAIL: "#5c3420",
-  RAIL_LIGHT: "#7d4a2c",
-  RAIL_HI: "#a3673d",
-  POCKET: "#050409",
-  BRASS: "#d8a03a",
-  RED: "#d92b3a",
-  RED_DARK: "#8f1622",
-  BLUE: "#2c6fd8",
-  BLUE_DARK: "#1a3f8f",
-  YELLOW: "#f2c53d",
-  YELLOW_DARK: "#b8862a",
-  GREEN: "#35b55a",
-  PURPLE: "#7b3fbf",
-  ORANGE: "#e8792b",
-  MAROON: "#7a2233",
-  CYAN: "#45e0d8",
-  MAGENTA: "#e04fa8",
+  // Felt (Vibrant Arcade Emerald Green)
+  FELT: "#1e8c5a",
+  FELT_LIGHT: "#2ec980",
+  FELT_DARK: "#125435",
+
+  // Rails & Woodwork (Rich Mahogany / Warm Polished Wood)
+  RAIL: "#6d351a",
+  RAIL_LIGHT: "#a05526",
+  RAIL_DARK: "#3a180b",
+  RAIL_HI: "#c47035",
+
+  // Table Pockets & Accents
+  POCKET: "#0a0812",
+  BRASS: "#ffd700",
+
+  // Billiard Ball Pigments (Vivid & High Contrast)
+  YELLOW: "#ffd000",
+  YELLOW_DARK: "#c49a00",
+  BLUE: "#0077ff",
+  BLUE_DARK: "#004bb3",
+  RED: "#ff2a4b",
+  RED_DARK: "#b30e27",
+  PURPLE: "#9b30ff",
+  ORANGE: "#ff7700",
+  GREEN: "#00d655",
+  MAROON: "#a0003b",
+
+  // Base Neutrals & UI
+  BLACK: "#0a0814",
+  WHITE: "#ffffff",
+  SILVER: "#c8c4de",
+  GREY: "#7a7499",
+  SLATE: "#3a3359",
+  DARK: "#221c3b",
+  DARKEST: "#141026",
+
+  // Vibrant Neon UI Accents
+  CYAN: "#00f5ff",
+  MAGENTA: "#ff2a9d",
 };

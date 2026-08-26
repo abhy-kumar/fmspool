@@ -7,18 +7,18 @@ export const BALL_COLORS = [
   { id: 1,  base: PAL.YELLOW,  dark: PAL.YELLOW_DARK, stripe: false, name: "1 Solid" },
   { id: 2,  base: PAL.BLUE,    dark: PAL.BLUE_DARK,   stripe: false, name: "2 Solid" },
   { id: 3,  base: PAL.RED,     dark: PAL.RED_DARK,    stripe: false, name: "3 Solid" },
-  { id: 4,  base: PAL.PURPLE,  dark: PAL.DARK,        stripe: false, name: "4 Solid" },
-  { id: 5,  base: PAL.ORANGE,  dark: PAL.DARK,        stripe: false, name: "5 Solid" },
-  { id: 6,  base: PAL.GREEN,   dark: PAL.DARK,        stripe: false, name: "6 Solid" },
-  { id: 7,  base: PAL.MAROON,  dark: PAL.DARK,        stripe: false, name: "7 Solid" },
-  { id: 8,  base: PAL.DARKEST, dark: PAL.BLACK,       stripe: false, name: "8 Ball" },
+  { id: 4,  base: PAL.PURPLE,  dark: "#6112aa",       stripe: false, name: "4 Solid" },
+  { id: 5,  base: PAL.ORANGE,  dark: "#b84e00",       stripe: false, name: "5 Solid" },
+  { id: 6,  base: PAL.GREEN,   dark: "#008f36",       stripe: false, name: "6 Solid" },
+  { id: 7,  base: PAL.MAROON,  dark: "#660024",       stripe: false, name: "7 Solid" },
+  { id: 8,  base: "#111116",   dark: PAL.BLACK,       stripe: false, name: "8 Ball" },
   { id: 9,  base: PAL.YELLOW,  dark: PAL.YELLOW_DARK, stripe: true,  name: "9 Stripe" },
   { id: 10, base: PAL.BLUE,    dark: PAL.BLUE_DARK,   stripe: true,  name: "10 Stripe" },
   { id: 11, base: PAL.RED,     dark: PAL.RED_DARK,    stripe: true,  name: "11 Stripe" },
-  { id: 12, base: PAL.PURPLE,  dark: PAL.DARK,        stripe: true,  name: "12 Stripe" },
-  { id: 13, base: PAL.ORANGE,  dark: PAL.DARK,        stripe: true,  name: "13 Stripe" },
-  { id: 14, base: PAL.GREEN,   dark: PAL.DARK,        stripe: true,  name: "14 Stripe" },
-  { id: 15, base: PAL.MAROON,  dark: PAL.DARK,        stripe: true,  name: "15 Stripe" },
+  { id: 12, base: PAL.PURPLE,  dark: "#6112aa",       stripe: true,  name: "12 Stripe" },
+  { id: 13, base: PAL.ORANGE,  dark: "#b84e00",       stripe: true,  name: "13 Stripe" },
+  { id: 14, base: PAL.GREEN,   dark: "#008f36",       stripe: true,  name: "14 Stripe" },
+  { id: 15, base: PAL.MAROON,  dark: "#660024",       stripe: true,  name: "15 Stripe" },
 ];
 
 // 9x9 circle mask definitions
@@ -85,7 +85,7 @@ export function bakeBallSprites() {
       };
 
       if (id === 0) {
-        // Cue ball
+        // Cue ball: Crisp pure white with bright specular shine & red aiming dot
         for (let r = 0; r < 9; r++) {
           for (let c = CIRCLE_MASK[r][0]; c <= CIRCLE_MASK[r][1]; c++) {
             setPixel(c, r, PAL.WHITE);
@@ -115,37 +115,37 @@ export function bakeBallSprites() {
           }
         }
 
+        // Shading on bottom-right crescent
         for (let r = 5; r <= 8; r++) {
           for (let c = 6; c <= 8; c++) {
             if (isInsideCircle(r, c)) {
-              if (ballDef.dark && ballDef.dark !== PAL.DARK) {
+              if (ballDef.dark) {
                 setPixel(c, r, ballDef.dark);
               } else {
                 const idx = (r * 9 + c) * 4;
-                data[idx] = Math.round(data[idx] * 0.6);
-                data[idx + 1] = Math.round(data[idx + 1] * 0.6);
-                data[idx + 2] = Math.round(data[idx + 2] * 0.6);
+                data[idx] = Math.round(data[idx] * 0.65);
+                data[idx + 1] = Math.round(data[idx + 1] * 0.65);
+                data[idx + 2] = Math.round(data[idx + 2] * 0.65);
               }
             }
           }
         }
 
-        if (id !== 8) {
-          setPixel(4, 3, PAL.WHITE);
-          setPixel(3, 4, PAL.WHITE);
-          setPixel(4, 4, PAL.WHITE);
-          setPixel(5, 4, PAL.WHITE);
-          setPixel(4, 5, PAL.WHITE);
-          setPixel(4, 4, PAL.DARKEST);
-        } else {
-          setPixel(4, 3, PAL.WHITE);
-          setPixel(3, 4, PAL.WHITE);
-          setPixel(4, 4, PAL.WHITE);
-          setPixel(5, 4, PAL.WHITE);
-          setPixel(4, 5, PAL.WHITE);
+        // White number circle
+        setPixel(4, 3, PAL.WHITE);
+        setPixel(3, 4, PAL.WHITE);
+        setPixel(4, 4, PAL.WHITE);
+        setPixel(5, 4, PAL.WHITE);
+        setPixel(4, 5, PAL.WHITE);
+
+        // Center number pixel
+        if (id === 8) {
           setPixel(4, 4, PAL.BLACK);
+        } else {
+          setPixel(4, 4, PAL.DARKEST);
         }
 
+        // Bright top-left specular highlight
         setPixel(2, 2, PAL.WHITE);
         if (frame === 1 || frame === 3) setPixel(3, 2, PAL.WHITE);
       }
@@ -156,7 +156,7 @@ export function bakeBallSprites() {
   }
 }
 
-// Bake felt with Bayer 2x2 dither
+// Bake felt with Bayer 2x2 dither in rich vibrant arcade green
 export function bakeFelt(feltColor = PAL.FELT, lightColor = PAL.FELT_LIGHT, darkColor = PAL.FELT_DARK) {
   const { canvas, ctx } = createOffscreen(400, 200);
   ctx.fillStyle = feltColor;
@@ -199,8 +199,8 @@ export function bakeFelt(feltColor = PAL.FELT, lightColor = PAL.FELT_LIGHT, dark
 export function bakeCueStick(cueSkin = "DEFAULT") {
   const { canvas, ctx } = createOffscreen(56, 5);
 
-  let buttColor = PAL.MAROON;
-  let shaftColor = PAL.YELLOW_DARK;
+  let buttColor = "#8a1c32";
+  let shaftColor = "#f5c358";
   let tipColor = PAL.CYAN;
 
   if (cueSkin === "MIDNIGHT") {
@@ -235,8 +235,8 @@ export function bakeCueStick(cueSkin = "DEFAULT") {
 
   // 3. Shaft: 32px at x = 2..33 (tapering from 2px to 3px)
   ctx.fillStyle = shaftColor;
-  ctx.fillRect(2, 1, 14, 2);  // 2px thick near tip
-  ctx.fillRect(16, 1, 18, 3); // 3px thick toward wrap
+  ctx.fillRect(2, 1, 14, 2);
+  ctx.fillRect(16, 1, 18, 3);
 
   // 4. Wrap: 6px at x = 34..39 (3px thick)
   ctx.fillStyle = PAL.DARKEST;
@@ -254,7 +254,7 @@ export function bakeCueStick(cueSkin = "DEFAULT") {
 export function bakeBallShadow() {
   const { canvas, ctx } = createOffscreen(9, 5);
   ctx.fillStyle = PAL.FELT_DARK;
-  ctx.globalAlpha = 0.4;
+  ctx.globalAlpha = 0.55;
   ctx.fillRect(2, 0, 5, 1);
   ctx.fillRect(1, 1, 7, 1);
   ctx.fillRect(0, 2, 9, 1);
@@ -275,8 +275,8 @@ export const AI_PERSONALITIES = [
 ];
 
 export function bakeAIPortraits() {
-  const skinTones = ["#f2c53d", "#d8a03a", "#c0bcd0", "#e8792b", "#8b849d"];
-  const hairColors = [PAL.MAROON, PAL.DARKEST, PAL.YELLOW_DARK, PAL.SLATE, PAL.RED_DARK];
+  const skinTones = ["#ffd08a", "#f5ad58", "#e69138", "#ffc570", "#d47a28"];
+  const hairColors = [PAL.MAROON, PAL.DARKEST, PAL.YELLOW, PAL.RED, PAL.BLUE];
 
   AI_PERSONALITIES.forEach((ai) => {
     const rng = makeRng(ai.seed);
@@ -313,10 +313,10 @@ export function bakeAIPortraits() {
       ctx.fillRect(10, 7, 1, 1);
     }
 
-    ctx.fillStyle = PAL.DARKEST;
+    ctx.fillStyle = PAL.RED;
     ctx.fillRect(6, 11, 4, 1);
 
-    ctx.fillStyle = ai.tier === "LEGEND" ? PAL.RED : PAL.SLATE;
+    ctx.fillStyle = ai.tier === "LEGEND" ? PAL.MAGENTA : PAL.CYAN;
     ctx.fillRect(2, 13, 12, 3);
 
     SPRITES.portraits[ai.name] = canvas;
@@ -326,12 +326,12 @@ export function bakeAIPortraits() {
 // Bake tier badges
 export function bakeTierBadges() {
   const tierBadges = [
-    { id: "BRONZE",   color: PAL.RAIL_HI },
-    { id: "SILVER",   color: PAL.SILVER },
-    { id: "GOLD",     color: PAL.BRASS },
-    { id: "PLATINUM", color: PAL.CYAN },
-    { id: "DIAMOND",  color: PAL.MAGENTA },
-    { id: "MASTER",   color: PAL.RED },
+    { id: "BRONZE",   color: "#d97724" },
+    { id: "SILVER",   color: "#d4daf0" },
+    { id: "GOLD",     color: "#ffd700" },
+    { id: "PLATINUM", color: "#00f5ff" },
+    { id: "DIAMOND",  color: "#ff2a9d" },
+    { id: "MASTER",   color: "#ff2a4b" },
   ];
 
   tierBadges.forEach((t) => {
