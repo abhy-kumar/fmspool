@@ -44,7 +44,7 @@ export class InputController {
     this.aimAngle = lerpAngle(this.aimAngle, this.targetAimAngle, 0.5);
 
     // 2. Continuous fine aim when holding buttons/keys
-    const fineRate = (0.04 * Math.PI) / 180; // 0.04 deg/frame
+    const fineRate = (0.04 * Math.PI) / 180;
     if (this.fineLeftHeld) {
       this.targetAimAngle -= fineRate;
       this.aimAngle = this.targetAimAngle;
@@ -54,7 +54,7 @@ export class InputController {
       this.aimAngle = this.targetAimAngle;
     }
 
-    // 3. Spacebar power oscillation (0 -> 1 over 1.2s)
+    // 3. Spacebar power oscillation
     if (this.spaceCharging) {
       this.spaceChargeTime += dt;
       const t = (this.spaceChargeTime % 1.2) / 1.2;
@@ -63,21 +63,17 @@ export class InputController {
     }
   }
 
-  // Check if touch is on cue stick or cue ball
   isTouchingCueStick(px, py, cue) {
     if (!cue || !cue.inPlay) return false;
     const cuePx = physToPx(cue.x, cue.y);
     const aimDir = fromAngle(this.aimAngle);
 
     const toPointer = sub({ x: px, y: py }, cuePx);
-    // Rear distance along opposite of aim vector (where cue stick is)
     const rearDist = -(toPointer.x * aimDir.x + toPointer.y * aimDir.y);
-    // Perpendicular distance from cue stick line
     const perpDist = Math.abs(toPointer.x * (-aimDir.y) - toPointer.y * (-aimDir.x));
 
-    // Cue ball circle (radius 14px) or cue stick rear corridor (up to 80px behind, 20px wide)
-    const onBall = Math.hypot(toPointer.x, toPointer.y) <= 18;
-    const onStick = rearDist >= -4 && rearDist <= 90 && perpDist <= 22;
+    const onBall = Math.hypot(toPointer.x, toPointer.y) <= 16;
+    const onStick = rearDist >= 6 && rearDist <= 85 && perpDist <= 20;
 
     return onBall || onStick;
   }
@@ -111,7 +107,7 @@ export class InputController {
         if (typeof onShoot === "function") {
           onShoot({
             angle: this.aimAngle,
-            power: this.power,
+            power: Math.max(CFG.MIN_POWER, this.power),
             spin: { ...this.spin },
           });
           this.resetSpin();
@@ -138,25 +134,27 @@ export class InputController {
         return;
       }
 
-      // Check Power Bar (generous touch zone)
+      // Check Power Bar
       if (this.isInside(px, py, this.powerBarRect) || (px >= 468 && px <= 512 && py >= 50 && py <= 194)) {
         this.isDraggingPower = true;
         this.updatePowerFromBar(py);
         return;
       }
 
-      // Check Cue Stick / Cue Ball Pull-back (Crucial: Aim angle is LOCKED)
+      // Check Cue Stick Pull-Back
       if (this.isTouchingCueStick(px, py, cue)) {
         this.isPullingBack = true;
         const cuePx = physToPx(cue.x, cue.y);
         const aimDir = fromAngle(this.aimAngle);
         const toPointer = sub({ x: px, y: py }, cuePx);
-        const rearDist = Math.max(0, -(toPointer.x * aimDir.x + toPointer.y * aimDir.y));
-        this.power = clamp(rearDist / 70, CFG.MIN_POWER, CFG.MAX_POWER);
+        const rearDist = -(toPointer.x * aimDir.x + toPointer.y * aimDir.y);
+        if (rearDist > 6) {
+          this.power = clamp((rearDist - 6) / 70, 0, CFG.MAX_POWER);
+        }
         return;
       }
 
-      // Default: Aiming on felt (ONLY when NOT touching cue stick or UI)
+      // Default: Aiming on felt
       if (cue && cue.inPlay && this.isInsidePlayfield(px, py)) {
         this.isDraggingAim = true;
         const cuePhys = { x: cue.x, y: cue.y };
@@ -171,13 +169,24 @@ export class InputController {
         this.updateSpin(px, py);
       } else if (this.isDraggingPower) {
         this.updatePowerFromBar(py);
-      } else if (this.isPullingBack) {
-        // Drag along cue stick line without changing angle
+      } else if (this.isPullingBack && cue && cue.inPlay) {
         const cuePx = physToPx(cue.x, cue.y);
         const aimDir = fromAngle(this.aimAngle);
         const toPointer = sub({ x: px, y: py }, cuePx);
-        const rearDist = Math.max(0, -(toPointer.x * aimDir.x + toPointer.y * aimDir.y));
-        this.power = clamp(rearDist / 70, CFG.MIN_POWER, CFG.MAX_POWER);
+        const rearDist = -(toPointer.x * aimDir.x + toPointer.y * aimDir.y);
+        const perpDist = Math.abs(toPointer.x * (-aimDir.y) - toPointer.y * (-aimDir.x));
+
+        // IF USER PUSHES POWER TO 0 (rearDist <= 6) OR MOVES OUT OF CORRIDOR -> ALLOW EDITING DIRECTION!
+        if (rearDist <= 6 || perpDist > 32) {
+          this.power = 0;
+          this.isPullingBack = false;
+          this.isDraggingAim = true;
+          const cuePhys = { x: cue.x, y: cue.y };
+          const pointerPhys = pxToPhys(px, py);
+          this.targetAimAngle = Math.atan2(pointerPhys.y - cuePhys.y, pointerPhys.x - cuePhys.x);
+        } else {
+          this.power = clamp((rearDist - 6) / 70, 0, CFG.MAX_POWER);
+        }
       } else if (this.isDraggingAim && cue && cue.inPlay) {
         const cuePhys = { x: cue.x, y: cue.y };
         const pointerPhys = pxToPhys(px, py);
@@ -199,7 +208,7 @@ export class InputController {
 
       if (this.isPullingBack) {
         this.isPullingBack = false;
-        // Release to fire if pulled back with sufficient power
+        // If power was pulled back above min threshold -> Shoot!
         if (this.power >= CFG.MIN_POWER && typeof onShoot === "function") {
           onShoot({
             angle: this.aimAngle,
@@ -207,6 +216,9 @@ export class InputController {
             spin: { ...this.spin },
           });
           this.resetSpin();
+        } else {
+          // Cancelled pull-back / 0 power -> Keep ready for aiming
+          this.power = 0.35;
         }
       }
     }
@@ -223,7 +235,6 @@ export class InputController {
 
       if (!isHumanTurn) return;
 
-      // Fine aim keys
       const stepDeg = e.shiftKey ? 0.02 : 0.15;
       const stepRad = (stepDeg * Math.PI) / 180;
       if (e.code === "ArrowLeft") {
@@ -234,14 +245,12 @@ export class InputController {
         this.aimAngle = this.targetAimAngle;
       }
 
-      // Direct Power Keys 1..9, 0
       if (e.code >= "Digit1" && e.code <= "Digit9") {
         this.power = parseInt(e.code.slice(5), 10) * 0.1;
       } else if (e.code === "Digit0") {
         this.power = 1.0;
       }
 
-      // Space to charge shot
       if (e.code === "Space" && !this.spaceCharging && !e.repeat) {
         this.spaceCharging = true;
         this.spaceChargeTime = 0;
@@ -252,7 +261,7 @@ export class InputController {
         if (isHumanTurn && typeof onShoot === "function") {
           onShoot({
             angle: this.aimAngle,
-            power: this.power,
+            power: Math.max(CFG.MIN_POWER, this.power),
             spin: { ...this.spin },
           });
           this.resetSpin();
@@ -362,7 +371,7 @@ export class InputController {
     ctx.textBaseline = "middle";
     ctx.fillText("=", this.pauseBtn.x + this.pauseBtn.w / 2, this.pauseBtn.y + this.pauseBtn.h / 2);
 
-    // 3. Power Bar (Chunky retro segments + Drag indicator)
+    // 3. Power Bar
     const bar = this.powerBarRect;
     ctx.fillStyle = PAL.DARK;
     ctx.fillRect(bar.x - 2, bar.y - 2, bar.w + 4, bar.h + 4);
@@ -370,10 +379,10 @@ export class InputController {
     ctx.lineWidth = 1;
     ctx.strokeRect(bar.x - 2, bar.y - 2, bar.w + 4, bar.h + 4);
 
-    // Header label
     ctx.fillStyle = PAL.SILVER;
     ctx.font = '8px "Press Start 2P", monospace';
     ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
     ctx.fillText("PWR", bar.x + bar.w / 2, bar.y - 8);
 
     const numSegments = 8;
@@ -387,9 +396,9 @@ export class InputController {
 
       let segColor = PAL.DARKEST;
       if (isActive) {
-        if (s <= 2) segColor = PAL.GREEN;        // 0..0.4
-        else if (s <= 5) segColor = PAL.YELLOW;  // 0.4..0.75
-        else segColor = PAL.RED;                 // 0.75..1.0
+        if (s <= 2) segColor = PAL.GREEN;
+        else if (s <= 5) segColor = PAL.YELLOW;
+        else segColor = PAL.RED;
       }
 
       ctx.fillStyle = segColor;
@@ -409,7 +418,7 @@ export class InputController {
     ctx.textBaseline = "middle";
     ctx.fillText("HIT", sb.x + sb.w / 2, sb.y + sb.h / 2);
 
-    // 5. Spin Control Widget (34x34 cue ball disc)
+    // 5. Spin Control Widget
     const sw = this.spinWidgetRect;
     ctx.fillStyle = PAL.DARK;
     ctx.fillRect(sw.x, sw.y, sw.w, sw.h);
