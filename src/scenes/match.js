@@ -1,0 +1,659 @@
+import { CFG, DIFFICULTY } from "../config.js";
+import { PAL } from "../palette.js";
+import { SPRITES, AI_PERSONALITIES } from "../sprites.js";
+import { createMatchState, createShotReport, processPhysicsEvents, evaluateShot, countRemaining } from "../rules.js";
+import { step, allAtRest } from "../physics.js";
+import { renderTable, renderBalls, renderCueStick, renderAimAssist, renderCRTEffect, physToPx, pxToPhys } from "../render.js";
+import { InputController } from "../input.js";
+import { chooseShot, chooseBallInHand } from "../ai.js";
+import { matchScore, getTier } from "../scoring.js";
+import { loadSave, saveMatchSnapshot, clearMatchSnapshot, saveImmediate, loadSettings } from "../storage.js";
+import { submitRun, checkQualifiesTop10 } from "../cloud.js";
+import { renderPanel, renderButton, ArcadeKeyboard } from "../ui.js";
+import { makeRng } from "../rng.js";
+import { go } from "../main.js";
+import { audio } from "../audio.js";
+import { fromAngle, mul, dist, clamp, lerpAngle } from "../vec.js";
+import { POCKETS } from "../table.js";
+
+export const matchScene = {
+  name: "match",
+  state: null,
+  input: null,
+  difficultyId: "AMATEUR",
+  modeKey: "EXHIBITION",
+  tournamentBracket: null,
+  tournamentRound: null,
+
+  // Shot resolution
+  shotReport: null,
+  shotTimer: 0,
+
+  // AI Animation State
+  aiThinkingTimer: 0,
+  aiThinkingTotal: 1.0,
+  aiPlannedShot: null,
+  aiCueAngle: 0,
+  aiCuePower: 0,
+  aiPhase: "IDLE", // 'IDLE' | 'THINKING' | 'ROTATING' | 'PULLBACK' | 'STRIKE'
+  aiAnimProgress: 0,
+
+  // UI / Modals
+  pauseOpen: false,
+  resultsOpen: false,
+  resultsData: null,
+  arcadeKeyboard: null,
+  top10Rank: null,
+
+  enter(params = {}) {
+    audio.playTrack("MATCH");
+    this.input = new InputController();
+    this.pauseOpen = false;
+    this.resultsOpen = false;
+    this.arcadeKeyboard = null;
+    this.aiPhase = "IDLE";
+
+    const save = loadSave();
+
+    if (params.resume && save.activeMatch) {
+      this.state = save.activeMatch;
+      this.tournamentBracket = save.activeTournament || null;
+      this.difficultyId = params.difficulty || "AMATEUR";
+      this.modeKey = this.tournamentBracket ? "T_QUARTER" : "RANKED";
+    } else {
+      this.difficultyId = params.difficulty || "AMATEUR";
+      this.modeKey = params.mode || "EXHIBITION";
+      this.tournamentBracket = params.bracket || null;
+      this.tournamentRound = params.round || null;
+      this.state = createMatchState(Date.now(), "PLAYER");
+    }
+
+    this.input.aimAngle = 0;
+    this.input.targetAimAngle = 0;
+  },
+
+  exit() {
+    audio.stopMusic();
+  },
+
+  update(dt) {
+    if (this.pauseOpen) return;
+
+    if (this.arcadeKeyboard) {
+      this.arcadeKeyboard.update(dt);
+      return;
+    }
+
+    if (this.resultsOpen) return;
+
+    // 1. Message timer countdown
+    if (this.state.messageTimer > 0) {
+      this.state.messageTimer -= dt;
+    }
+
+    // 2. Shot Clock
+    if (this.state.phase === "AIMING" || this.state.phase === "CALL_POCKET" || this.state.phase === "BALL_IN_HAND") {
+      this.state.shotClock -= dt;
+      if (this.state.shotClock <= 5 && this.state.shotClock > 0) {
+        if (Math.floor(this.state.shotClock + dt) !== Math.floor(this.state.shotClock)) {
+          audio.playSfx("tick", { pitch: 440 + (5 - Math.floor(this.state.shotClock)) * 60 });
+        }
+      }
+
+      if (this.state.shotClock <= 0) {
+        // Shot clock expired foul
+        audio.playSfx("foul");
+        const shooter = this.state.turn;
+        const opponent = shooter === "PLAYER" ? "AI" : "PLAYER";
+        this.state.stats[shooter].fouls++;
+        this.state.turn = opponent;
+        this.state.phase = "BALL_IN_HAND";
+        this.state.ballInHand = true;
+        this.state.ballInHandBehindLine = false;
+        this.state.shotClock = CFG.SHOT_CLOCK_S;
+        this.state.message = "SHOT CLOCK EXPIRED! FOUL";
+        this.state.messageTimer = 2.5;
+        saveMatchSnapshot(this.state, this.tournamentBracket);
+      }
+    }
+
+    // 3. Human Input Update
+    this.input.update(dt, this.state);
+
+    // 4. AI Turn State Machine
+    if (this.state.turn === "AI") {
+      this.updateAITurn(dt);
+    }
+
+    // 5. Physics Shot Resolving
+    if (this.state.phase === "SHOT_RESOLVING") {
+      this.shotTimer += dt;
+
+      // Fixed physics substeps
+      const events = step(this.state, dt);
+      if (events.length > 0) {
+        processPhysicsEvents(this.shotReport, events, this.state);
+        // Play SFX
+        events.forEach((ev) => {
+          if (ev.type === "ballHit") {
+            audio.playSfx("ballHit", { speed: ev.speed });
+          } else if (ev.type === "cushion") {
+            audio.playSfx("cushion");
+          } else if (ev.type === "pocket") {
+            audio.playSfx("pocketDrop");
+          }
+        });
+      }
+
+      // Settling condition or hard timeout
+      if (allAtRest(this.state) || this.shotTimer >= CFG.SETTLE_TIMEOUT_S) {
+        // Force all ball velocities to rest
+        this.state.balls.forEach((b) => { b.vx = 0; b.vy = 0; });
+        this.finishShot();
+      }
+    }
+  },
+
+  updateAITurn(dt) {
+    const diff = DIFFICULTY[this.difficultyId] || DIFFICULTY.AMATEUR;
+    const rng = makeRng(this.state.seed + this.state.shotIndex * 31);
+
+    // AI Ball-in-Hand
+    if (this.state.phase === "BALL_IN_HAND" || this.state.phase === "PLACE_CUE_BREAK") {
+      const pos = chooseBallInHand(this.state, diff, rng);
+      const cue = this.state.balls[0];
+      cue.x = pos.x;
+      cue.y = pos.y;
+      cue.inPlay = true;
+      cue.pocketed = false;
+      this.state.phase = "AIMING";
+      this.state.ballInHand = false;
+      this.state.shotClock = CFG.SHOT_CLOCK_S;
+      this.aiPhase = "IDLE";
+      return;
+    }
+
+    if (this.state.phase === "CALL_POCKET") {
+      this.state.calledPocket = POCKETS[0].id;
+      this.state.phase = "AIMING";
+      return;
+    }
+
+    if (this.state.phase !== "AIMING") return;
+
+    if (this.aiPhase === "IDLE") {
+      this.aiPhase = "THINKING";
+      this.aiThinkingTotal = (CFG.AI_THINK_MIN_MS + rng() * (CFG.AI_THINK_MAX_MS - CFG.AI_THINK_MIN_MS)) / 1000;
+      this.aiThinkingTimer = 0;
+
+      // Run AI Search
+      chooseShot(this.state, diff, rng).then((shot) => {
+        this.aiPlannedShot = shot;
+        if (shot.kind === "SAFETY") {
+          this.state.message = "AI: SAFETY PLAY";
+          this.state.messageTimer = 2.0;
+        }
+      });
+    } else if (this.aiPhase === "THINKING") {
+      this.aiThinkingTimer += dt;
+      if (this.aiThinkingTimer >= this.aiThinkingTotal && this.aiPlannedShot) {
+        this.aiPhase = "ROTATING";
+        this.aiAnimProgress = 0;
+      }
+    } else if (this.aiPhase === "ROTATING") {
+      this.aiAnimProgress += dt / 0.35; // 350ms rotation
+      const t = Math.min(1, this.aiAnimProgress);
+      this.aiCueAngle = lerpAngle(this.aiCueAngle, this.aiPlannedShot.angle, t);
+
+      if (t >= 1) {
+        this.aiPhase = "PULLBACK";
+        this.aiAnimProgress = 0;
+      }
+    } else if (this.aiPhase === "PULLBACK") {
+      this.aiAnimProgress += dt / 0.25; // 250ms pull-back
+      const t = Math.min(1, this.aiAnimProgress);
+      this.aiCuePower = this.aiPlannedShot.power * t;
+
+      if (t >= 1) {
+        this.aiPhase = "STRIKE";
+        this.executeShot(this.aiPlannedShot);
+        this.aiPhase = "IDLE";
+        this.aiPlannedShot = null;
+      }
+    }
+  },
+
+  executeShot(shot) {
+    const cue = this.state.balls[0];
+    if (!cue || !cue.inPlay) return;
+
+    audio.playSfx("cueStrike", { power: shot.power });
+    audio.duckMusic(400);
+
+    const dir = fromAngle(shot.angle);
+    const speed = shot.power * CFG.POWER_TO_SPEED;
+    cue.vx = dir.x * speed;
+    cue.vy = dir.y * speed;
+    cue.spin = { ...shot.spin };
+
+    this.shotReport = createShotReport();
+    this.shotTimer = 0;
+    this.state.phase = "SHOT_RESOLVING";
+  },
+
+  finishShot() {
+    const result = evaluateShot(this.state, this.shotReport);
+
+    if (result.foul) {
+      audio.playSfx("foul");
+    }
+
+    if (this.state.phase === "GAME_OVER") {
+      this.handleGameOver();
+    } else {
+      this.state.shotClock = CFG.SHOT_CLOCK_S;
+      saveMatchSnapshot(this.state, this.tournamentBracket);
+    }
+  },
+
+  async handleGameOver() {
+    clearMatchSnapshot();
+    const won = this.state.winner === "PLAYER";
+    if (won) audio.playTrack("VICTORY");
+    else audio.playTrack("DEFEAT");
+
+    const yourBallsLeft = countRemaining(this.state.balls, this.state.groups.PLAYER);
+    const oppBallsLeft = countRemaining(this.state.balls, this.state.groups.AI);
+
+    const res = matchScore(
+      this.state.stats.PLAYER,
+      won,
+      yourBallsLeft,
+      oppBallsLeft,
+      this.difficultyId,
+      this.modeKey
+    );
+
+    this.resultsData = {
+      score: res.score,
+      won,
+      components: res.components,
+      diffMult: res.diffMult,
+      modeMult: res.modeMultiplier,
+      coinsEarned: won ? 150 : 25,
+    };
+
+    const save = loadSave();
+    save.career.matchesPlayed++;
+    if (won) save.career.matchesWon++;
+    save.career.shots += this.state.stats.PLAYER.shots;
+    save.career.ownPots += this.state.stats.PLAYER.ownPots;
+    save.career.fouls += this.state.stats.PLAYER.fouls;
+    save.career.longestRun = Math.max(save.career.longestRun, this.state.stats.PLAYER.longestRun);
+    save.career.bestRunScore = Math.max(save.career.bestRunScore, res.score);
+    save.career.runsPlayed++;
+    save.coins = (save.coins || 0) + this.resultsData.coinsEarned;
+
+    saveImmediate(save);
+
+    // Check Top 10 Entry
+    const qualifies = await checkQualifiesTop10(res.score);
+    if (qualifies || !save.displayName || save.displayName === "PLAYER") {
+      this.arcadeKeyboard = new ArcadeKeyboard(save.displayName, (enteredName) => {
+        save.displayName = enteredName;
+        saveImmediate(save);
+        this.submitRunCloud(res.score, won);
+        this.arcadeKeyboard = null;
+        this.resultsOpen = true;
+      }, () => {
+        this.submitRunCloud(res.score, won);
+        this.arcadeKeyboard = null;
+        this.resultsOpen = true;
+      });
+    } else {
+      this.submitRunCloud(res.score, won);
+      this.resultsOpen = true;
+    }
+  },
+
+  submitRunCloud(score, won) {
+    const save = loadSave();
+    submitRun(save.playerId, {
+      score,
+      mode: this.modeKey,
+      difficulty: this.difficultyId,
+      cup: this.tournamentBracket ? this.tournamentBracket.cupId : null,
+      won,
+      stats: {
+        shots: this.state.stats.PLAYER.shots,
+        ownPots: this.state.stats.PLAYER.ownPots,
+        fouls: this.state.stats.PLAYER.fouls,
+        longestRun: this.state.stats.PLAYER.longestRun,
+        seconds: Math.round(this.state.stats.PLAYER.totalShotSeconds),
+      },
+    }, save);
+  },
+
+  render(ctx) {
+    ctx.fillStyle = PAL.BLACK;
+    ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
+
+    // 1. Render Pool Table & Pockets
+    renderTable(ctx);
+
+    // 2. Call Pocket Highlights
+    if (this.state.phase === "CALL_POCKET") {
+      POCKETS.forEach((p) => {
+        const pPx = physToPx(p.x, p.y);
+        ctx.strokeStyle = PAL.CYAN;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(pPx.x, pPx.y, p.r * CFG.PHYS_TO_PX + 2, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+    }
+
+    // 3. Render Balls
+    renderBalls(ctx, this.state.balls);
+
+    // 4. Render Aim Assist & Cue Stick
+    const settings = loadSettings();
+    if (this.state.phase === "AIMING" && this.state.balls[0] && this.state.balls[0].inPlay) {
+      if (this.state.turn === "PLAYER") {
+        renderAimAssist(ctx, this.state, this.input.aimAngle, settings.assistLevel);
+        renderCueStick(ctx, this.state.balls[0], this.input.aimAngle, this.input.power, settings.selectedCue);
+      } else if (this.state.turn === "AI" && (this.aiPhase === "ROTATING" || this.aiPhase === "PULLBACK")) {
+        renderCueStick(ctx, this.state.balls[0], this.aiCueAngle, this.aiCuePower, "DEFAULT");
+      }
+    }
+
+    // 5. Render HUD Strip (Top 46 px)
+    this.renderHUD(ctx);
+
+    // 6. Render Input Controls Overlay
+    if (this.state.turn === "PLAYER") {
+      this.input.renderControls(ctx, this.state);
+    }
+
+    // 7. Results Modal Overlay
+    if (this.resultsOpen && this.resultsData) {
+      this.renderResultsModal(ctx);
+    }
+
+    // 8. Arcade Keyboard
+    if (this.arcadeKeyboard) {
+      this.arcadeKeyboard.render(ctx, this.resultsData ? this.resultsData.score : null, this.top10Rank);
+    }
+
+    // 9. Pause Menu Overlay
+    if (this.pauseOpen) {
+      this.renderPauseModal(ctx);
+    }
+
+    renderCRTEffect(ctx);
+  },
+
+  renderHUD(ctx) {
+    const save = loadSave();
+    const pRating = save.runScores ? save.runScores[0] || 400 : 400;
+    const pTier = getTier(pRating);
+
+    // HUD Background
+    ctx.fillStyle = PAL.DARKEST;
+    ctx.fillRect(0, 0, CFG.BASE_W, 46);
+    ctx.strokeStyle = PAL.SLATE;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, CFG.BASE_W, 46);
+
+    // Player Block (Left)
+    ctx.fillStyle = this.state.turn === "PLAYER" ? PAL.CYAN : PAL.WHITE;
+    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(save.displayName || "PLAYER", 8, 8);
+
+    // Group indicator & dots
+    const pGroup = this.state.groups.PLAYER;
+    if (pGroup) {
+      const gBallId = pGroup === "SOLIDS" ? 1 : 9;
+      if (SPRITES.balls[gBallId]) ctx.drawImage(SPRITES.balls[gBallId][0], 8, 22);
+      ctx.fillStyle = PAL.SILVER;
+      ctx.fillText(`${pGroup}`, 22, 23);
+    } else {
+      ctx.fillStyle = PAL.GREY;
+      ctx.fillText("OPEN", 8, 23);
+    }
+
+    // AI Block (Right)
+    const aiDef = AI_PERSONALITIES.find((a) => a.tier === this.difficultyId) || AI_PERSONALITIES[0];
+    const portrait = SPRITES.portraits[aiDef.name];
+    if (portrait) {
+      ctx.drawImage(portrait, CFG.BASE_W - 24, 6);
+    }
+
+    ctx.fillStyle = this.state.turn === "AI" ? PAL.CYAN : PAL.WHITE;
+    ctx.textAlign = "right";
+    ctx.fillText(aiDef.name, CFG.BASE_W - 30, 8);
+
+    const aiGroup = this.state.groups.AI;
+    if (aiGroup) {
+      ctx.fillStyle = PAL.SILVER;
+      ctx.fillText(`${aiGroup}`, CFG.BASE_W - 30, 23);
+    } else {
+      ctx.fillStyle = PAL.GREY;
+      ctx.fillText("OPEN", CFG.BASE_W - 30, 23);
+    }
+
+    // Center: Shot Clock Bar (60x6 px)
+    const clockW = 60;
+    const clockH = 6;
+    const clockX = Math.round(CFG.BASE_W / 2 - clockW / 2);
+    const clockY = 8;
+    const clockFrac = clamp(this.state.shotClock / CFG.SHOT_CLOCK_S, 0, 1);
+
+    ctx.fillStyle = PAL.DARK;
+    ctx.fillRect(clockX, clockY, clockW, clockH);
+    ctx.strokeStyle = PAL.SLATE;
+    ctx.strokeRect(clockX, clockY, clockW, clockH);
+
+    let clockCol = PAL.GREEN;
+    if (clockFrac < 0.25) clockCol = PAL.RED;
+    else if (clockFrac < 0.5) clockCol = PAL.YELLOW;
+
+    ctx.fillStyle = clockCol;
+    ctx.fillRect(clockX + 1, clockY + 1, Math.round((clockW - 2) * clockFrac), clockH - 2);
+
+    // Message Line with 1px black outline
+    if (this.state.message && this.state.messageTimer > 0) {
+      const msgX = Math.round(CFG.BASE_W / 2);
+      const msgY = 24;
+      ctx.font = '8px "Press Start 2P", monospace';
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+
+      // Shadow/Outline
+      ctx.fillStyle = PAL.BLACK;
+      ctx.fillText(this.state.message, msgX + 1, msgY + 1);
+      ctx.fillText(this.state.message, msgX - 1, msgY - 1);
+
+      ctx.fillStyle = PAL.YELLOW;
+      ctx.fillText(this.state.message, msgX, msgY);
+    }
+  },
+
+  renderResultsModal(ctx) {
+    ctx.fillStyle = "rgba(5, 4, 9, 0.88)";
+    ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
+
+    const r = this.resultsData;
+    const title = r.won ? "VICTORY!" : "DEFEAT";
+    renderPanel(ctx, 46, 24, 420, 240, title);
+
+    ctx.fillStyle = r.won ? PAL.BRASS : PAL.RED;
+    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText(`FINAL SCORE: ${r.score}`, 256, 46);
+
+    // 6 Metrics breakdown
+    const metrics = [
+      { key: "VICTORY (V)", val: r.components.V },
+      { key: "DOMINANCE (D)", val: r.components.D },
+      { key: "PRECISION (P)", val: r.components.P },
+      { key: "DISCIPLINE (C)", val: r.components.C },
+      { key: "FLAIR (F)", val: r.components.F },
+      { key: "TEMPO (T)", val: r.components.T },
+    ];
+
+    const barStartX = 200;
+    const barW = 120;
+    const startY = 66;
+
+    metrics.forEach((m, idx) => {
+      const my = startY + idx * 18;
+      ctx.fillStyle = PAL.WHITE;
+      ctx.textAlign = "left";
+      ctx.fillText(m.key, 60, my + 2);
+
+      // Bar
+      ctx.fillStyle = PAL.DARKEST;
+      ctx.fillRect(barStartX, my, barW, 10);
+      ctx.strokeStyle = PAL.SLATE;
+      ctx.strokeRect(barStartX, my, barW, 10);
+
+      ctx.fillStyle = PAL.CYAN;
+      ctx.fillRect(barStartX + 1, my + 1, Math.round((barW - 2) * clamp(m.val, 0, 1)), 8);
+
+      ctx.textAlign = "right";
+      ctx.fillText(`${Math.round(m.val * 100)}%`, 430, my + 2);
+    });
+
+    // Formula Line
+    ctx.fillStyle = PAL.SILVER;
+    ctx.textAlign = "center";
+    const fStr = `S:${(r.components.composite).toFixed(2)} x DIFF:${r.diffMult.toFixed(2)} x MODE:${r.modeMult.toFixed(2)} = ${r.score}`;
+    ctx.fillText(fStr, 256, 182);
+
+    ctx.fillStyle = PAL.YELLOW;
+    ctx.fillText(`+${r.coinsEarned} COINS AWARDED`, 256, 198);
+
+    renderButton(ctx, { x: 196, y: 220, w: 120, h: 26 }, "CONTINUE", false);
+  },
+
+  renderPauseModal(ctx) {
+    ctx.fillStyle = "rgba(5, 4, 9, 0.85)";
+    ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
+
+    renderPanel(ctx, 156, 60, 200, 168, "PAUSED");
+
+    renderButton(ctx, { x: 176, y: 86, w: 160, h: 24 }, "RESUME", false);
+    renderButton(ctx, { x: 176, y: 118, w: 160, h: 24 }, "SETTINGS", false);
+    renderButton(ctx, { x: 176, y: 150, w: 160, h: 24 }, "CONCEDE", false);
+    renderButton(ctx, { x: 176, y: 182, w: 160, h: 24 }, "QUIT TO TITLE", false);
+  },
+
+  handlePointer(e) {
+    if (this.arcadeKeyboard) {
+      this.arcadeKeyboard.handlePointer(e);
+      return;
+    }
+
+    if (this.resultsOpen) {
+      if (e.type === "pointerdown" && e.x >= 196 && e.x <= 316 && e.y >= 220 && e.y <= 246) {
+        audio.playSfx("uiSelect");
+        if (this.tournamentBracket) {
+          go("tournament", { resume: true, bracket: this.tournamentBracket });
+        } else {
+          go("leaderboard");
+        }
+      }
+      return;
+    }
+
+    if (this.pauseOpen) {
+      if (e.type !== "pointerdown") return;
+      if (e.x >= 176 && e.x <= 336) {
+        if (e.y >= 86 && e.y <= 110) {
+          audio.playSfx("uiSelect");
+          this.pauseOpen = false;
+        } else if (e.y >= 118 && e.y <= 142) {
+          audio.playSfx("uiSelect");
+          go("settings");
+        } else if (e.y >= 150 && e.y <= 174) {
+          audio.playSfx("foul");
+          this.pauseOpen = false;
+          this.state.winner = "AI";
+          this.state.phase = "GAME_OVER";
+          this.handleGameOver();
+        } else if (e.y >= 182 && e.y <= 206) {
+          audio.playSfx("uiSelect");
+          clearMatchSnapshot();
+          go("title");
+        }
+      }
+      return;
+    }
+
+    // Call Pocket Tap
+    if (this.state.phase === "CALL_POCKET" && this.state.turn === "PLAYER" && e.type === "pointerdown") {
+      const phys = pxToPhys(e.x, e.y);
+      for (let p = 0; p < POCKETS.length; p++) {
+        if (dist(phys, POCKETS[p]) < POCKETS[p].r * 2) {
+          this.state.calledPocket = POCKETS[p].id;
+          this.state.phase = "AIMING";
+          this.state.message = `POCKET ${POCKETS[p].id} CALLED`;
+          this.state.messageTimer = 2.0;
+          audio.playSfx("uiSelect");
+          return;
+        }
+      }
+    }
+
+    // Controls Handling
+    this.input.handlePointer(
+      e,
+      this.state,
+      (shot) => this.executeShot(shot),
+      () => { this.pauseOpen = true; audio.playSfx("uiSelect"); },
+      (pos) => {
+        const cue = this.state.balls[0];
+        cue.x = pos.x;
+        cue.y = pos.y;
+        cue.inPlay = true;
+        cue.pocketed = false;
+        this.state.phase = "AIMING";
+        this.state.ballInHand = false;
+        this.state.shotClock = CFG.SHOT_CLOCK_S;
+        audio.playSfx("uiSelect");
+        saveMatchSnapshot(this.state, this.tournamentBracket);
+      }
+    );
+  },
+
+  onPointer(e) {
+    this.handlePointer(e);
+  },
+
+  onKey(e) {
+    if (this.arcadeKeyboard) {
+      this.arcadeKeyboard.handleKey(e);
+      return;
+    }
+
+    if (e.code === "Escape") {
+      if (this.resultsOpen) return;
+      this.pauseOpen = !this.pauseOpen;
+      audio.playSfx("uiSelect");
+      return;
+    }
+
+    if (this.pauseOpen || this.resultsOpen) return;
+
+    this.input.handleKey(
+      e,
+      this.state,
+      (shot) => this.executeShot(shot),
+      () => { this.pauseOpen = true; }
+    );
+  },
+};

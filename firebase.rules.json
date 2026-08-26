@@ -1,0 +1,39 @@
+{
+  "rules": {
+    "v1": {
+      "meta": { ".read": true, ".write": false },
+      "players": {
+        ".read": true,
+        "$pid": {
+          ".write": true,
+          ".validate": "newData.hasChildren(['displayName','updatedAt','revision']) && newData.child('displayName').isString() && newData.child('displayName').val().length <= 12 && newData.child('rating').val() >= 0 && newData.child('rating').val() <= 5000 && (!data.exists() || newData.child('revision').val() > data.child('revision').val())"
+        }
+      },
+      "runs": {
+        "$pid": {
+          ".read": true,
+          "$runId": {
+            ".write": "!data.exists()",
+            ".validate": "newData.hasChildren(['score','mode','at']) && newData.child('score').isNumber() && newData.child('score').val() >= 0 && newData.child('score').val() <= 20000 && newData.child('at').val() <= now + 60000"
+          }
+        }
+      },
+      "leaderboard": {
+        "players": {
+          ".read": true,
+          ".indexOn": ["rating","bestRunScore","precision","longestRun","titlesWeighted"],
+          "$pid": { ".write": true }
+        },
+        "runs": {
+          ".read": true,
+          ".indexOn": ["score","at"],
+          "$runId": { ".write": "!data.exists()" }
+        }
+      },
+      "nameIndex": {
+        ".read": true,
+        "$name": { "$pid": { ".write": "!data.exists()" } }
+      }
+    }
+  }
+}
