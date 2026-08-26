@@ -240,6 +240,28 @@ export function resetGameData() {
   return saveCache;
 }
 
+// Cosmetics Definitions
+export const COSMETIC_CUES = [
+  { id: "DEFAULT", name: "CLASSIC MAPLE", cost: 0 },
+  { id: "MIDNIGHT", name: "MIDNIGHT PURPLE", cost: 250 },
+  { id: "GOLDEN", name: "ROYAL GOLD", cost: 500 },
+  { id: "EMERALD", name: "EMERALD DRAGON", cost: 750 },
+  { id: "CYBER", name: "CYBER NEON", cost: 1000 },
+  { id: "DRAGON", name: "CRIMSON FLAME", cost: 1500 },
+];
+
+export const COSMETIC_FELTS = [
+  { id: "DEFAULT", name: "ARCADE EMERALD", color: "#158450", light: "#2ecb7e", dark: "#0d5c36", cost: 0 },
+  { id: "BLUE", name: "TOURNAMENT BLUE", color: "#154e84", light: "#2e7ecb", dark: "#0d365c", cost: 250 },
+  { id: "RED", name: "ROYAL VELVET", color: "#84152e", light: "#cb2e50", dark: "#5c0d1d", cost: 500 },
+  { id: "PURPLE", name: "MIDNIGHT PURPLE", color: "#5c1584", light: "#992ecb", dark: "#3c0d5c", cost: 750 },
+  { id: "BLACK", name: "OBSIDIAN SHADOW", color: "#1f1d2b", light: "#3a364d", dark: "#0f0e17", cost: 1000 },
+];
+
+export function resetAllProgress() {
+  return resetGameData();
+}
+
 // Flush immediately on unload or tab hide
 if (typeof window !== "undefined") {
   window.addEventListener("visibilitychange", () => {
