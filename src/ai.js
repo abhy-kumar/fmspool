@@ -147,7 +147,6 @@ function scoreSimulatedOutcome(state, shot, report, resultState, difficulty) {
   // Foul checks
   const foul = cueScratched || report.firstContact === null ||
     (!state.openTable && shooterBallsLeft > 0 && getBallGroup(report.firstContact) !== aiGroup) ||
-    (!state.openTable && shooterBallsLeft === 0 && report.firstContact !== 8) ||
     (state.openTable && report.firstContact === 8) ||
     (report.pocketed.length === 0 && !report.anyBallHitCushionAfterContact);
 

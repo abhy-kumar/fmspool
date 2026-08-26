@@ -28,11 +28,9 @@ export function createMatchState(seed = Date.now(), startingTurn = "PLAYER") {
     turn: startingTurn,
     groups: { PLAYER: null, AI: null }, // 'SOLIDS' | 'STRIPES'
     openTable: true,
-    phase: "PLACE_CUE_BREAK", // 'PLACE_CUE_BREAK'|'AIMING'|'SHOT_RESOLVING'|'BALL_IN_HAND'|'CALL_POCKET'|'GAME_OVER'
+    phase: "PLACE_CUE_BREAK", // 'PLACE_CUE_BREAK'|'AIMING'|'SHOT_RESOLVING'|'BALL_IN_HAND'|'GAME_OVER'
     ballInHand: false,
     ballInHandBehindLine: true,
-    calledPocket: null,
-    shotClock: CFG.SHOT_CLOCK_S,
     stats: {
       PLAYER: createFreshStats(),
       AI: createFreshStats(),
@@ -99,8 +97,8 @@ export function isBallLegalFirstContact(ballId, state, shooter = null) {
     // Must hit own group ball
     return getBallGroup(ballId) === shooterGroup;
   } else {
-    // Group cleared: must hit 8-ball
-    return ballId === 8;
+    // Group cleared: 8-ball is the primary winning target; any contact allowed
+    return true;
   }
 }
 
@@ -119,7 +117,6 @@ export function processPhysicsEvents(report, events, state) {
         report.cushionsAfterContact++;
         report.anyBallHitCushionAfterContact = true;
       }
-      // Only object balls count toward the four-rail break requirement.
       if (state.isBreakShot && ev.ball.id !== 0) {
         report.breakCushionBalls.add(ev.ball.id);
       }
@@ -132,8 +129,6 @@ export function processPhysicsEvents(report, events, state) {
   });
 }
 
-// Put the cue ball back in play for a ball-in-hand placement. A cue ball that is
-// still on the table keeps its position - only a pocketed one needs re-spotting.
 function respotCueForBallInHand(state) {
   const cue = state.balls[0];
   if (!cue) return;
@@ -206,12 +201,10 @@ export function evaluateShot(state, report) {
     if (foul) {
       shooterStats.fouls++;
       if (report.cueScratched) shooterStats.scratches++;
-      // Cue ball is off the table (or must be re-spotted) for the incoming player.
       respotCueForBallInHand(state);
       state.turn = opponent;
       state.phase = "BALL_IN_HAND";
       state.ballInHand = true;
-      // Standard rule: a scratch on the break gives ball in hand behind the head string.
       state.ballInHandBehindLine = report.cueScratched;
       state.message = `FOUL: ${foulReason}! BALL IN HAND`;
       state.messageTimer = 2.5;
@@ -256,19 +249,14 @@ export function evaluateShot(state, report) {
         foulReason = "CANNOT HIT 8-BALL ON OPEN TABLE";
       }
     } else {
-      // Table not open
+      // Table not open: must hit own group if group balls remain
       if (shooterBallsLeft > 0) {
         if (contactGroup !== shooterGroup) {
           foul = true;
           foulReason = `WRONG GROUP (HIT ${contactGroup})`;
         }
-      } else {
-        // Group cleared, must hit 8-ball
-        if (report.firstContact !== 8) {
-          foul = true;
-          foulReason = "MUST HIT 8-BALL FIRST";
-        }
       }
+      // When shooterBallsLeft === 0 (group cleared), any ball contact is permitted (no 8-ball contact requirement)
     }
 
     // Cushion after contact rule: at least one ball must be pocketed OR hit a cushion
@@ -278,12 +266,12 @@ export function evaluateShot(state, report) {
     }
   }
 
-  // 3. 8-Ball Pocketed Resolution (Win / Loss)
+  // 3. 8-Ball Pocketed Resolution (Win / Loss into ANY Pocket)
   if (eightPocketed) {
     const shooterBallsLeft = countRemaining(state.balls, shooterGroup);
 
     if (shooterBallsLeft > 0 || state.openTable) {
-      // Pocketed 8 early -> IMMEDIATE LOSS
+      // Pocketed 8 early (before clearing own group) -> IMMEDIATE LOSS
       state.winner = opponent;
       state.winReason = `${shooter} POCKETED 8-BALL EARLY`;
       state.phase = "GAME_OVER";
@@ -291,25 +279,14 @@ export function evaluateShot(state, report) {
     }
 
     if (foul) {
-      // Pocketed 8 on a foul/scratch -> IMMEDIATE LOSS
+      // Pocketed 8 on a scratch/foul -> IMMEDIATE LOSS
       state.winner = opponent;
       state.winReason = `${shooter} SCRATCHED ON 8-BALL`;
       state.phase = "GAME_OVER";
       return { foul: true, turnPasses: true, winner: opponent };
     }
 
-    const eightPocketObj = report.pocketed.find((p) => p.ball.id === 8);
-    const pocketedPocketId = eightPocketObj ? eightPocketObj.pocket.id : null;
-
-    if (state.calledPocket && pocketedPocketId !== state.calledPocket) {
-      // Wrong pocket called -> LOSS
-      state.winner = opponent;
-      state.winReason = `${shooter} MISSED CALLED POCKET FOR 8`;
-      state.phase = "GAME_OVER";
-      return { foul: true, turnPasses: true, winner: opponent };
-    }
-
-    // LEGAL WIN!
+    // LEGAL WIN! Pocketing the 8-ball into ANY pocket wins the game!
     state.winner = shooter;
     state.winReason = `${shooter} POCKETED 8-BALL TO WIN!`;
     state.phase = "GAME_OVER";
@@ -323,17 +300,11 @@ export function evaluateShot(state, report) {
     return { foul: false, turnPasses: false, winner: shooter };
   }
 
-  // The nomination only ever applies to the shot it was made for. Clearing it here
-  // stops one player's call carrying over onto the other player's 8-ball attempt.
-  state.calledPocket = null;
-
   // 4. Update Remaining Ball Counts & Group Assignments
   if (foul) {
     shooterStats.fouls++;
     shooterStats.currentRun = 0;
 
-    // Only a pocketed cue ball gets re-spotted. On any other foul it stays where it
-    // stopped, and the incoming player may move it from there.
     respotCueForBallInHand(state);
 
     state.turn = opponent;
@@ -383,8 +354,7 @@ export function evaluateShot(state, report) {
   state.stats.PLAYER.ballsRemaining = countRemaining(state.balls, state.groups.PLAYER);
   state.stats.AI.ballsRemaining = countRemaining(state.balls, state.groups.AI);
 
-  // Turn Continuation. The shooter keeps the table only by legally potting one of
-  // their own balls; clearing the group is not by itself a reason to shoot again.
+  // Turn Continuation
   if (!shooterPottedOwnGroup) {
     state.turn = opponent;
   }
@@ -393,13 +363,11 @@ export function evaluateShot(state, report) {
   const nextGroup = state.groups[nextShooter];
   const nextBallsLeft = countRemaining(state.balls, nextGroup);
 
+  state.phase = "AIMING";
   if (!state.openTable && nextGroup && nextBallsLeft === 0) {
-    // Whoever is up next is on the 8-ball and must nominate a pocket.
-    state.phase = "CALL_POCKET";
-    state.message = `${nextShooter}: CALL YOUR POCKET FOR 8-BALL`;
+    state.message = `${nextShooter}: POCKET 8-BALL TO WIN!`;
     state.messageTimer = 3.0;
   } else {
-    state.phase = "AIMING";
     state.message = shooterPottedOwnGroup ? `${shooter} CONTINUES` : `${nextShooter}'S TURN`;
     state.messageTimer = 1.5;
   }

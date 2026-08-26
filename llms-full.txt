@@ -28,12 +28,12 @@ FMS POOL is a zero-build retro pixel-art 8-ball billiards game designed to run n
 
 ---
 
-## 3. Rules Engine (WPA 8-Ball Standard)
-- State Machine Phases: PLACE_CUE_BREAK, AIMING, SHOT_RESOLVING, BALL_IN_HAND, CALL_POCKET, GAME_OVER.
+## 3. Rules Engine
+- State Machine Phases: PLACE_CUE_BREAK, AIMING, SHOT_RESOLVING, BALL_IN_HAND, GAME_OVER.
 - Break Shot: Cue ball behind head string (x < 200). Requires >= 1 pocketed or >= 4 balls touching cushions. 8-ball on break triggers re-rack and re-break.
-- Fouls: Cue scratch, no ball contact, wrong group first contact, no rail/pocket after contact, ball off table, shot clock expiration (30s). Foul awards opponent ball-in-hand anywhere on table.
+- Fouls: Cue scratch, no ball contact, wrong group first contact while group balls remain, no rail/pocket after contact, ball off table. Foul awards opponent ball-in-hand anywhere on table.
 - Group Assignment: Table remains open until a player legally pockets a ball on a non-foul shot.
-- 8-Ball Resolution: Pocketing 8-ball into called pocket after clearing group = WIN. Pocketing 8-ball early, into wrong pocket, or on scratch = IMMEDIATE LOSS.
+- 8-Ball Resolution: Once a player clears their group, pocketing the 8-ball into ANY pocket on a non-scratch shot = WIN. No pocket nomination required, and any ball contact is permitted on the 8-ball shot. Pocketing 8-ball early (before clearing group) or scratching while pocketing 8-ball = IMMEDIATE LOSS.
 
 ---
 

@@ -247,7 +247,7 @@ export const titleScene = {
         title: "HOW TO PLAY (1/3): RULES",
         lines: [
           "- Pocket solids (1-7) or stripes (9-15).",
-          "- 8-Ball is pocketed LAST into called pocket.",
+          "- 8-Ball is pocketed LAST into ANY pocket.",
           "- Scratch or potting 8-ball early = LOSS.",
           "- Hit your own ball group first each shot.",
         ],

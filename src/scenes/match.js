@@ -37,10 +37,8 @@ export const matchScene = {
   aiCuePower: 0,
   aiPhase: "IDLE", // 'IDLE' | 'THINKING' | 'ROTATING' | 'PULLBACK' | 'STRIKE'
   aiAnimProgress: 0,
-
-  aiPlanError: false,
   aiPlanWaited: 0,
-  settings: null,
+  aiPlanError: false,
 
   // UI / Modals
   pauseOpen: false,
@@ -56,10 +54,6 @@ export const matchScene = {
     this.resultsOpen = false;
     this.arcadeKeyboard = null;
     this.aiPhase = "IDLE";
-    this.aiPlannedShot = null;
-    this.aiPlanError = false;
-    // Read once per match rather than per rendered frame - loadSettings() parses
-    // JSON out of localStorage, which is far too expensive to do at 60fps.
     this.settings = loadSettings();
 
     const save = loadSave();
@@ -100,7 +94,7 @@ export const matchScene = {
       this.state.messageTimer -= dt;
     }
 
-    // 2. Human Input Update (No shot clock timer restrictions)
+    // 2. Human Input Update
     this.input.update(dt, this.state);
 
     // 3. AI Turn State Machine
@@ -150,29 +144,6 @@ export const matchScene = {
       return;
     }
 
-    // On the 8-ball the AI must nominate a pocket. It plans the shot first so the
-    // nomination matches the pocket it is actually going to shoot at - calling a
-    // fixed pocket made the AI forfeit almost every game it reached the 8 in.
-    if (this.state.phase === "CALL_POCKET") {
-      if (this.aiPhase === "IDLE") {
-        this.aiPhase = "CALLING";
-        this.beginAIPlan(diff, rng);
-      } else if (this.aiPhase === "CALLING" && (this.aiPlannedShot || this.aiPlanError)) {
-        const called = (this.aiPlannedShot && this.aiPlannedShot.calledPocket) || POCKETS[0].id;
-        this.state.calledPocket = called;
-        this.state.message = `AI CALLS POCKET ${called}`;
-        this.state.messageTimer = 2.0;
-        this.state.phase = "AIMING";
-        this.aiPhase = "THINKING";
-        this.aiThinkingTotal = (CFG.AI_THINK_MIN_MS + rng() * (CFG.AI_THINK_MAX_MS - CFG.AI_THINK_MIN_MS)) / 1000;
-        this.aiThinkingTimer = 0;
-      } else {
-        this.aiPlanWaited += dt;
-        if (this.aiPlanWaited > 6) this.aiPlanError = true;
-      }
-      return;
-    }
-
     if (this.state.phase !== "AIMING") return;
 
     if (this.aiPhase === "IDLE") {
@@ -183,7 +154,6 @@ export const matchScene = {
     } else if (this.aiPhase === "THINKING") {
       this.aiThinkingTimer += dt;
       this.aiPlanWaited += dt;
-      // Watchdog: never leave the match stuck on an AI turn if planning fails.
       if (!this.aiPlannedShot && this.aiPlanWaited > 6) {
         this.aiPlannedShot = this.fallbackAIShot();
       }
@@ -234,8 +204,6 @@ export const matchScene = {
       });
   },
 
-  // Straight, legal-ish poke at the nearest live ball. Only ever used if the real
-  // search throws or never resolves.
   fallbackAIShot() {
     const cue = this.state.balls[0];
     let target = null;
@@ -248,7 +216,13 @@ export const matchScene = {
       if (d < bestD) { bestD = d; target = b; }
     }
     const angle = target ? Math.atan2(target.y - cue.y, target.x - cue.x) : 0;
-    return { angle, power: 0.5, spin: { x: 0, y: 0 }, calledPocket: POCKETS[0].id, kind: "DESPERATE" };
+    return {
+      angle,
+      power: 0.55,
+      spin: { x: 0, y: 0 },
+      kind: "POT",
+      targetId: target ? target.id : 1,
+    };
   },
 
   executeShot(shot) {
@@ -263,14 +237,9 @@ export const matchScene = {
     cue.vx = dir.x * speed;
     cue.vy = dir.y * speed;
     cue.spin = { ...shot.spin };
-    // Per-shot flag: spin is transferred on the first object-ball contact of THIS
-    // shot. Without resetting it, spin stopped working after the opening break.
-    this.state.firstContactMade = false;
 
     this.shotReport = createShotReport();
     this.shotTimer = 0;
-    this.aiPlannedShot = null;
-    this.aiPhase = "IDLE";
     this.state.phase = "SHOT_RESOLVING";
   },
 
@@ -372,22 +341,10 @@ export const matchScene = {
     // 1. Render Pool Table & Pockets
     renderTable(ctx);
 
-    // 2. Call Pocket Highlights
-    if (this.state.phase === "CALL_POCKET") {
-      POCKETS.forEach((p) => {
-        const pPx = physToPx(p.x, p.y);
-        ctx.strokeStyle = PAL.CYAN;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(pPx.x, pPx.y, p.r * CFG.PHYS_TO_PX + 2, 0, Math.PI * 2);
-        ctx.stroke();
-      });
-    }
-
-    // 3. Render Balls with halos
+    // 2. Render Balls with halos
     renderBalls(ctx, this.state.balls, this.state);
 
-    // 4. Render Aim Assist & Cue Stick
+    // 3. Render Aim Assist & Cue Stick
     const settings = this.settings || loadSettings();
     if (this.state.phase === "AIMING" && this.state.balls[0] && this.state.balls[0].inPlay) {
       if (this.state.turn === "PLAYER") {
@@ -398,29 +355,27 @@ export const matchScene = {
       }
     }
 
-    // 5. Render HUD Strip (Top 46 px)
+    // 4. Render HUD Strip
     this.renderHUD(ctx);
 
-    // 6. Render Input Controls Overlay. The pause button is drawn (and hit-tested)
-    // in every phase so touch players are never locked out of the menu while the
-    // AI is thinking or the balls are still rolling.
+    // 5. Render Input Controls Overlay
     if (this.state.turn === "PLAYER") {
       this.input.renderControls(ctx, this.state);
     } else {
       this.input.renderPauseButton(ctx);
     }
 
-    // 7. Results Modal Overlay
+    // 6. Results Modal Overlay
     if (this.resultsOpen && this.resultsData) {
       this.renderResultsModal(ctx);
     }
 
-    // 8. Arcade Keyboard
+    // 7. Arcade Keyboard
     if (this.arcadeKeyboard) {
       this.arcadeKeyboard.render(ctx, this.resultsData ? this.resultsData.score : null, this.top10Rank);
     }
 
-    // 9. Pause Menu Overlay
+    // 8. Pause Menu Overlay
     if (this.pauseOpen) {
       this.renderPauseModal(ctx);
     }
@@ -431,7 +386,7 @@ export const matchScene = {
   renderHUD(ctx) {
     const save = loadSave();
 
-    // HUD Background (Rich dark indigo with bright slate/cyan borders)
+    // HUD Background
     ctx.fillStyle = PAL.DARKEST;
     ctx.fillRect(0, 0, CFG.BASE_W, 46);
     ctx.strokeStyle = PAL.SLATE;
@@ -511,7 +466,7 @@ export const matchScene = {
       ctx.fillText("OPEN", CFG.BASE_W - 26, 20);
     }
 
-    // Center: Turn Banner & Game Messages (Large, clear, and unhurried)
+    // Center: Turn Banner & Game Messages
     const msgX = Math.round(CFG.BASE_W / 2);
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
@@ -523,7 +478,6 @@ export const matchScene = {
       ctx.fillStyle = PAL.YELLOW;
       ctx.fillText(this.state.message, msgX, 14);
     } else {
-      // Show active shooter turn banner
       const isPlayer = this.state.turn === "PLAYER";
       ctx.font = '8px "Press Start 2P", monospace';
       ctx.fillStyle = isPlayer ? PAL.CYAN : PAL.MAGENTA;
@@ -650,26 +604,11 @@ export const matchScene = {
       return;
     }
 
-    // Pause is always available, whoever is at the table.
+    // Pause button always accessible
     if (e.type === "pointerdown" && this.input.isInside(e.x, e.y, this.input.pauseBtn)) {
       this.pauseOpen = true;
       audio.playSfx("uiSelect");
       return;
-    }
-
-    // Call Pocket Tap
-    if (this.state.phase === "CALL_POCKET" && this.state.turn === "PLAYER" && e.type === "pointerdown") {
-      const phys = pxToPhys(e.x, e.y);
-      for (let p = 0; p < POCKETS.length; p++) {
-        if (dist(phys, POCKETS[p]) < POCKETS[p].r * 2) {
-          this.state.calledPocket = POCKETS[p].id;
-          this.state.phase = "AIMING";
-          this.state.message = `POCKET ${POCKETS[p].id} CALLED`;
-          this.state.messageTimer = 2.0;
-          audio.playSfx("uiSelect");
-          return;
-        }
-      }
     }
 
     // Controls Handling
