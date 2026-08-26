@@ -34,36 +34,39 @@ sceneManager.register("settings", settingsScene);
 
 export { go };
 
-// Window resize & viewport scaling
+// Window resize & viewport scaling to fill 100% of the available display
 function updateViewport() {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
 
-  if (vh > vw) {
-    // Portrait mode -> rotate 90 degrees
+  if (vh > vw * 1.05) {
+    // Portrait mode -> rotate 90 degrees and fit rotated canvas to full screen bounds
     view.rotated = true;
-    const rawScale = Math.min(vw / CFG.BASE_H, vh / CFG.BASE_W);
-    view.scale = rawScale >= 1 ? Math.floor(rawScale) : rawScale;
-    if (view.scale <= 0) view.scale = 1;
+    const scale = Math.min(vw / CFG.BASE_H, vh / CFG.BASE_W);
+    view.scale = scale > 0 ? scale : 1;
 
-    canvas.style.width = `${Math.round(CFG.BASE_W * view.scale)}px`;
-    canvas.style.height = `${Math.round(CFG.BASE_H * view.scale)}px`;
+    const w = Math.round(CFG.BASE_W * view.scale);
+    const h = Math.round(CFG.BASE_H * view.scale);
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
     canvas.style.transform = "rotate(90deg)";
   } else {
-    // Landscape mode -> normal orientation
+    // Landscape mode -> fit canvas to 100% maximum possible width and height
     view.rotated = false;
-    const rawScale = Math.min(vw / CFG.BASE_W, vh / CFG.BASE_H);
-    view.scale = rawScale >= 1 ? Math.floor(rawScale) : rawScale;
-    if (view.scale <= 0) view.scale = 1;
+    const scale = Math.min(vw / CFG.BASE_W, vh / CFG.BASE_H);
+    view.scale = scale > 0 ? scale : 1;
 
-    canvas.style.width = `${Math.round(CFG.BASE_W * view.scale)}px`;
-    canvas.style.height = `${Math.round(CFG.BASE_H * view.scale)}px`;
+    const w = Math.round(CFG.BASE_W * view.scale);
+    const h = Math.round(CFG.BASE_H * view.scale);
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
     canvas.style.transform = "none";
   }
 }
 
 window.addEventListener("resize", updateViewport);
 window.addEventListener("orientationchange", updateViewport);
+document.addEventListener("fullscreenchange", updateViewport);
 
 // Screen space -> Base pixel coordinate unprojection (including 90 deg inverse)
 export function screenToBase(clientX, clientY) {
@@ -126,6 +129,17 @@ canvas.addEventListener("pointercancel", (e) => {
 
 // Keyboard Event Handlers
 window.addEventListener("keydown", (e) => {
+  // F key for fullscreen toggle
+  if ((e.key === "f" || e.key === "F") && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    if (sceneManager.current && sceneManager.current.name !== "settings") {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+  }
+
   if (sceneManager.current && typeof sceneManager.current.onKey === "function") {
     sceneManager.current.onKey(e);
   }
