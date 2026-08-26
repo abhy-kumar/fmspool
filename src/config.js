@@ -11,15 +11,18 @@ export const CFG = {
   TABLE_H: 400,
   BALL_R: 9,
   BALL_MASS: 1,
-  POCKET_R_CORNER: 17,   // capture radius, centre-to-centre
-  POCKET_R_SIDE: 16,
+  // Capture radius, centre-to-centre. Slightly wider than a real table's ~2 ball-radii
+  // mouth: with collision resolution now exact, honest pocket geometry made long cuts
+  // unforgiving on a 512px canvas, so the pockets are opened up for arcade feel.
+  POCKET_R_CORNER: 20,
+  POCKET_R_SIDE: 18,
   HEAD_STRING_X: 200,    // cue ball placed behind this on break (x < 200)
   FOOT_SPOT: { x: 600, y: 200 },
   HEAD_SPOT: { x: 200, y: 200 },
 
   // ---- Physics ----
   DT: 1 / 240,           // fixed physics timestep, seconds
-  MAX_SUBSTEPS: 12,      // per rendered frame, to avoid spiral-of-death
+  MAX_SUBSTEPS: 24,      // per rendered frame; covers a full 0.1s capped frame at DT
   MAX_SPEED: 1900,       // u/s. INVARIANT: MAX_SPEED * DT (7.92) < BALL_R (9). Never break this.
   MIN_SPEED: 6,          // below this, ball is snapped to rest
   ROLL_FRICTION: 260,    // u/s^2, linear deceleration
@@ -39,8 +42,11 @@ export const CFG = {
   SETTLE_TIMEOUT_S: 14,      // hard cap on a shot resolving
 
   // ---- AI ----
-  AI_SIM_DT: 1 / 120,        // coarser timestep for AI look-ahead (2x faster)
-  AI_SIM_MAX_STEPS: 900,     // ~7.5s of simulated time
+  // The AI look-ahead must obey the same no-tunnel invariant as the live game:
+  // MAX_SPEED * AI_SIM_DT (7.92) < BALL_R (9). A coarser step made the AI mis-predict
+  // fast shots because balls passed through each other in simulation.
+  AI_SIM_DT: 1 / 240,
+  AI_SIM_MAX_STEPS: 1800,    // ~7.5s of simulated time
   AI_MAX_CANDIDATES: 48,
   AI_TIME_BUDGET_MS: 220,    // hard cap on search; degrade gracefully
   AI_THINK_MIN_MS: 650,      // artificial delay so it feels human
@@ -62,10 +68,14 @@ export const CFG = {
 };
 
 export const DIFFICULTY = {
-  ROOKIE:  { id: "ROOKIE",  label: "ROOKIE",  aimSigmaDeg: 2.20, powerSigma: 0.14, safetySkill: 0.15, lookahead: 0, mult: 0.70, searchN: 1 },
-  AMATEUR: { id: "AMATEUR", label: "AMATEUR", aimSigmaDeg: 1.20, powerSigma: 0.09, safetySkill: 0.40, lookahead: 0, mult: 1.00, searchN: 1 },
-  PRO:     { id: "PRO",     label: "PRO",     aimSigmaDeg: 0.55, powerSigma: 0.05, safetySkill: 0.70, lookahead: 1, mult: 1.35, searchN: 2 },
-  LEGEND:  { id: "LEGEND",  label: "LEGEND",  aimSigmaDeg: 0.15, powerSigma: 0.02, safetySkill: 0.92, lookahead: 1, mult: 1.70, searchN: 3 },
+  // aimSigmaDeg is re-spaced for the corrected collision physics. Previously the engine
+  // itself introduced up to 20 degrees of error, which swamped these values and made
+  // every tier play the same; past roughly 1 degree nothing drops, so the useful range
+  // is much narrower than it looks.
+  ROOKIE:  { id: "ROOKIE",  label: "ROOKIE",  aimSigmaDeg: 1.10, powerSigma: 0.14, safetySkill: 0.15, lookahead: 0, mult: 0.70, searchN: 1 },
+  AMATEUR: { id: "AMATEUR", label: "AMATEUR", aimSigmaDeg: 0.55, powerSigma: 0.09, safetySkill: 0.40, lookahead: 0, mult: 1.00, searchN: 1 },
+  PRO:     { id: "PRO",     label: "PRO",     aimSigmaDeg: 0.25, powerSigma: 0.05, safetySkill: 0.70, lookahead: 1, mult: 1.35, searchN: 2 },
+  LEGEND:  { id: "LEGEND",  label: "LEGEND",  aimSigmaDeg: 0.08, powerSigma: 0.02, safetySkill: 0.92, lookahead: 1, mult: 1.70, searchN: 3 },
 };
 
 export const MODE_MULT = {

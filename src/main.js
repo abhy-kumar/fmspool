@@ -1,5 +1,6 @@
 import { CFG } from "./config.js";
 import { sceneManager, go } from "./sceneManager.js";
+import { view } from "./view.js";
 import { bootScene } from "./scenes/boot.js";
 import { titleScene } from "./scenes/title.js";
 import { matchScene } from "./scenes/match.js";
@@ -17,12 +18,7 @@ export const canvas = document.getElementById("game-canvas");
 export const ctx = canvas.getContext("2d", { alpha: false });
 ctx.imageSmoothingEnabled = false;
 
-export const view = {
-  scale: 1,
-  rotated: false,
-  width: CFG.BASE_W,
-  height: CFG.BASE_H,
-};
+export { view };
 
 // Register all scenes into the decoupled sceneManager
 sceneManager.register("boot", bootScene);
@@ -50,6 +46,11 @@ function updateViewport() {
     canvas.style.width = `${w}px`;
     canvas.style.height = `${h}px`;
     canvas.style.transform = "rotate(90deg)";
+
+    // Rotated: the canvas x axis runs down the screen, y axis runs across it.
+    const padX = Math.max(0, (vh - w) / 2) / view.scale;
+    const padY = Math.max(0, (vw - h) / 2) / view.scale;
+    view.baseBounds = { minX: -padX, minY: -padY, maxX: CFG.BASE_W + padX, maxY: CFG.BASE_H + padY };
   } else {
     // Landscape mode -> fit canvas to 100% maximum possible width and height
     view.rotated = false;
@@ -61,6 +62,10 @@ function updateViewport() {
     canvas.style.width = `${w}px`;
     canvas.style.height = `${h}px`;
     canvas.style.transform = "none";
+
+    const padX = Math.max(0, (vw - w) / 2) / view.scale;
+    const padY = Math.max(0, (vh - h) / 2) / view.scale;
+    view.baseBounds = { minX: -padX, minY: -padY, maxX: CFG.BASE_W + padX, maxY: CFG.BASE_H + padY };
   }
 }
 
@@ -89,9 +94,16 @@ export function screenToBase(clientX, clientY) {
     sy = 1 - t;
   }
 
+  // Raw values may sit outside the canvas: pointer capture keeps delivering moves
+  // once a finger leaves the letterboxed area, and drags need that extra travel.
+  const rawX = sx * CFG.BASE_W;
+  const rawY = sy * CFG.BASE_H;
+
   return {
-    x: Math.max(0, Math.min(CFG.BASE_W, sx * CFG.BASE_W)),
-    y: Math.max(0, Math.min(CFG.BASE_H, sy * CFG.BASE_H)),
+    x: Math.max(0, Math.min(CFG.BASE_W, rawX)),
+    y: Math.max(0, Math.min(CFG.BASE_H, rawY)),
+    rawX,
+    rawY,
   };
 }
 
@@ -102,6 +114,8 @@ function handlePointer(type, originalEvent) {
     type,
     x: coords.x,
     y: coords.y,
+    rawX: coords.rawX,
+    rawY: coords.rawY,
     button: originalEvent.button,
     buttons: originalEvent.buttons,
     pointerId: originalEvent.pointerId,

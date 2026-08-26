@@ -18,7 +18,12 @@ export function isProfane(text) {
     .replace(/@/g, "a")
     .replace(/(.)\1+/g, "$1");
 
-  return BLOCKED_WORDS.some((word) => normalized.includes(word.toLowerCase()));
+  // Whole-word / bounded matching only. Substring matching rejected innocent names
+  // like CLASSIC and BASS because "ass" appears inside them.
+  return BLOCKED_WORDS.some((word) => {
+    const w = word.toLowerCase();
+    return new RegExp(`(^|[^a-z])${w}([^a-z]|$)`).test(normalized) || normalized === w;
+  });
 }
 
 // Render Retro Pixel Panel

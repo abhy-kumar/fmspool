@@ -1,7 +1,7 @@
 import { CFG, DIFFICULTY } from "../config.js";
 import { PAL } from "../palette.js";
 import { SPRITES, AI_PERSONALITIES } from "../sprites.js";
-import { createMatchState, createShotReport, processPhysicsEvents, evaluateShot, countRemaining, getBallGroup } from "../rules.js";
+import { createMatchState, createShotReport, processPhysicsEvents, evaluateShot, countRemaining, getBallGroup, isBallLegalFirstContact } from "../rules.js";
 import { step, allAtRest } from "../physics.js";
 import { renderTable, renderBalls, renderCueStick, renderAimAssist, renderCRTEffect, physToPx, pxToPhys } from "../render.js";
 import { InputController } from "../input.js";
@@ -38,6 +38,10 @@ export const matchScene = {
   aiPhase: "IDLE", // 'IDLE' | 'THINKING' | 'ROTATING' | 'PULLBACK' | 'STRIKE'
   aiAnimProgress: 0,
 
+  aiPlanError: false,
+  aiPlanWaited: 0,
+  settings: null,
+
   // UI / Modals
   pauseOpen: false,
   resultsOpen: false,
@@ -52,6 +56,11 @@ export const matchScene = {
     this.resultsOpen = false;
     this.arcadeKeyboard = null;
     this.aiPhase = "IDLE";
+    this.aiPlannedShot = null;
+    this.aiPlanError = false;
+    // Read once per match rather than per rendered frame - loadSettings() parses
+    // JSON out of localStorage, which is far too expensive to do at 60fps.
+    this.settings = loadSettings();
 
     const save = loadSave();
 
@@ -141,9 +150,26 @@ export const matchScene = {
       return;
     }
 
+    // On the 8-ball the AI must nominate a pocket. It plans the shot first so the
+    // nomination matches the pocket it is actually going to shoot at - calling a
+    // fixed pocket made the AI forfeit almost every game it reached the 8 in.
     if (this.state.phase === "CALL_POCKET") {
-      this.state.calledPocket = POCKETS[0].id;
-      this.state.phase = "AIMING";
+      if (this.aiPhase === "IDLE") {
+        this.aiPhase = "CALLING";
+        this.beginAIPlan(diff, rng);
+      } else if (this.aiPhase === "CALLING" && (this.aiPlannedShot || this.aiPlanError)) {
+        const called = (this.aiPlannedShot && this.aiPlannedShot.calledPocket) || POCKETS[0].id;
+        this.state.calledPocket = called;
+        this.state.message = `AI CALLS POCKET ${called}`;
+        this.state.messageTimer = 2.0;
+        this.state.phase = "AIMING";
+        this.aiPhase = "THINKING";
+        this.aiThinkingTotal = (CFG.AI_THINK_MIN_MS + rng() * (CFG.AI_THINK_MAX_MS - CFG.AI_THINK_MIN_MS)) / 1000;
+        this.aiThinkingTimer = 0;
+      } else {
+        this.aiPlanWaited += dt;
+        if (this.aiPlanWaited > 6) this.aiPlanError = true;
+      }
       return;
     }
 
@@ -153,16 +179,14 @@ export const matchScene = {
       this.aiPhase = "THINKING";
       this.aiThinkingTotal = (CFG.AI_THINK_MIN_MS + rng() * (CFG.AI_THINK_MAX_MS - CFG.AI_THINK_MIN_MS)) / 1000;
       this.aiThinkingTimer = 0;
-
-      chooseShot(this.state, diff, rng).then((shot) => {
-        this.aiPlannedShot = shot;
-        if (shot.kind === "SAFETY") {
-          this.state.message = "AI: SAFETY PLAY";
-          this.state.messageTimer = 2.0;
-        }
-      });
+      this.beginAIPlan(diff, rng);
     } else if (this.aiPhase === "THINKING") {
       this.aiThinkingTimer += dt;
+      this.aiPlanWaited += dt;
+      // Watchdog: never leave the match stuck on an AI turn if planning fails.
+      if (!this.aiPlannedShot && this.aiPlanWaited > 6) {
+        this.aiPlannedShot = this.fallbackAIShot();
+      }
       if (this.aiThinkingTimer >= this.aiThinkingTotal && this.aiPlannedShot) {
         this.aiPhase = "ROTATING";
         this.aiAnimProgress = 0;
@@ -190,6 +214,43 @@ export const matchScene = {
     }
   },
 
+  beginAIPlan(diff, rng) {
+    this.aiPlannedShot = null;
+    this.aiPlanError = false;
+    this.aiPlanWaited = 0;
+
+    chooseShot(this.state, diff, rng)
+      .then((shot) => {
+        this.aiPlannedShot = shot || this.fallbackAIShot();
+        if (shot && shot.kind === "SAFETY") {
+          this.state.message = "AI: SAFETY PLAY";
+          this.state.messageTimer = 2.0;
+        }
+      })
+      .catch((err) => {
+        console.error("[Match] AI shot planning failed, falling back", err);
+        this.aiPlanError = true;
+        this.aiPlannedShot = this.fallbackAIShot();
+      });
+  },
+
+  // Straight, legal-ish poke at the nearest live ball. Only ever used if the real
+  // search throws or never resolves.
+  fallbackAIShot() {
+    const cue = this.state.balls[0];
+    let target = null;
+    let bestD = Infinity;
+    for (let i = 1; i <= 15; i++) {
+      const b = this.state.balls[i];
+      if (!b || !b.inPlay) continue;
+      if (!isBallLegalFirstContact(b.id, this.state, "AI")) continue;
+      const d = dist(cue, b);
+      if (d < bestD) { bestD = d; target = b; }
+    }
+    const angle = target ? Math.atan2(target.y - cue.y, target.x - cue.x) : 0;
+    return { angle, power: 0.5, spin: { x: 0, y: 0 }, calledPocket: POCKETS[0].id, kind: "DESPERATE" };
+  },
+
   executeShot(shot) {
     const cue = this.state.balls[0];
     if (!cue || !cue.inPlay) return;
@@ -202,9 +263,14 @@ export const matchScene = {
     cue.vx = dir.x * speed;
     cue.vy = dir.y * speed;
     cue.spin = { ...shot.spin };
+    // Per-shot flag: spin is transferred on the first object-ball contact of THIS
+    // shot. Without resetting it, spin stopped working after the opening break.
+    this.state.firstContactMade = false;
 
     this.shotReport = createShotReport();
     this.shotTimer = 0;
+    this.aiPlannedShot = null;
+    this.aiPhase = "IDLE";
     this.state.phase = "SHOT_RESOLVING";
   },
 
@@ -322,7 +388,7 @@ export const matchScene = {
     renderBalls(ctx, this.state.balls, this.state);
 
     // 4. Render Aim Assist & Cue Stick
-    const settings = loadSettings();
+    const settings = this.settings || loadSettings();
     if (this.state.phase === "AIMING" && this.state.balls[0] && this.state.balls[0].inPlay) {
       if (this.state.turn === "PLAYER") {
         renderAimAssist(ctx, this.state, this.input.aimAngle, settings.assistLevel);
@@ -335,9 +401,13 @@ export const matchScene = {
     // 5. Render HUD Strip (Top 46 px)
     this.renderHUD(ctx);
 
-    // 6. Render Input Controls Overlay
+    // 6. Render Input Controls Overlay. The pause button is drawn (and hit-tested)
+    // in every phase so touch players are never locked out of the menu while the
+    // AI is thinking or the balls are still rolling.
     if (this.state.turn === "PLAYER") {
       this.input.renderControls(ctx, this.state);
+    } else {
+      this.input.renderPauseButton(ctx);
     }
 
     // 7. Results Modal Overlay
@@ -577,6 +647,13 @@ export const matchScene = {
           go("title");
         }
       }
+      return;
+    }
+
+    // Pause is always available, whoever is at the table.
+    if (e.type === "pointerdown" && this.input.isInside(e.x, e.y, this.input.pauseBtn)) {
+      this.pauseOpen = true;
+      audio.playSfx("uiSelect");
       return;
     }
 

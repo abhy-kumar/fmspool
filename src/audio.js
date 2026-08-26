@@ -545,3 +545,22 @@ class SoundEngine {
 
 export const audio = new SoundEngine();
 audio.generateTracks();
+
+// Browsers refuse to start an AudioContext outside a user gesture, so the first
+// track requested at boot would otherwise sit silently suspended. Unlock on the
+// first real interaction and resume whatever track is already queued.
+if (typeof window !== "undefined") {
+  const unlock = () => {
+    audio.initContext();
+    if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume().catch(() => {});
+  };
+  ["pointerdown", "touchstart", "keydown"].forEach((evt) => {
+    window.addEventListener(evt, unlock, { passive: true });
+  });
+  // A suspended context also stalls when the tab is backgrounded on mobile.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && audio.ctx && audio.ctx.state === "suspended") {
+      audio.ctx.resume().catch(() => {});
+    }
+  });
+}

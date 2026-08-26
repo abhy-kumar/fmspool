@@ -1,6 +1,6 @@
 import { CFG } from "./config.js";
 import { POCKETS } from "./table.js";
-import { dist, dot, sub, norm, mul, add, perp } from "./vec.js";
+import { dist, dot, sub, norm, mul, add, perp, distToSegment } from "./vec.js";
 
 // Deep clone state for physics simulation & AI lookahead
 export function cloneState(state) {
@@ -18,6 +18,8 @@ export function cloneState(state) {
       pocketed: b.pocketed,
       pocketedInto: b.pocketedInto,
       distanceTravelled: b.distanceTravelled,
+      prevX: b.prevX,
+      prevY: b.prevY,
     })),
     firstContactMade: state.firstContactMade || false,
   };
@@ -26,6 +28,31 @@ export function cloneState(state) {
 // Check if all balls on table are stationary
 export function allAtRest(state) {
   return state.balls.every((b) => !b.inPlay || (b.vx === 0 && b.vy === 0));
+}
+
+// True when this ball is at a pocket mouth and its path takes it inside the capture
+// radius - i.e. it is going in, so the surrounding cushions must not deflect it.
+function isEnteringPocket(b) {
+  const reach = CFG.BALL_R * 2;
+  for (let p = 0; p < POCKETS.length; p++) {
+    const pocket = POCKETS[p];
+    const tx = pocket.x - b.x;
+    const ty = pocket.y - b.y;
+    const distSq = tx * tx + ty * ty;
+    const mouth = pocket.r + reach;
+    if (distSq > mouth * mouth) continue;
+
+    const speedSq = b.vx * b.vx + b.vy * b.vy;
+    if (speedSq < 1e-6) return true; // at rest in the jaws
+
+    // Closest approach of the ball's current path to the pocket centre.
+    const t = (tx * b.vx + ty * b.vy) / speedSq;
+    if (t < 0) continue; // heading away from this pocket
+    const cx = tx - b.vx * t;
+    const cy = ty - b.vy * t;
+    if (cx * cx + cy * cy <= pocket.r * pocket.r) return true; // same threshold as capture
+  }
+  return false;
 }
 
 // Main Physics Integration Step (Deterministic, zero Math.random())
@@ -40,6 +67,10 @@ export function step(state, dt = CFG.DT) {
     const b = balls[i];
     if (!b.inPlay) continue;
 
+    // Remember where the ball started this step so pocket capture can be tested
+    // against the whole path travelled, not just the sampled end point.
+    b.prevX = b.x;
+    b.prevY = b.y;
     b.x += b.vx * dt;
     b.y += b.vy * dt;
     const spd = Math.hypot(b.vx, b.vy);
@@ -80,10 +111,15 @@ export function step(state, dt = CFG.DT) {
     const b = balls[i];
     if (!b.inPlay) continue;
 
+    const ax = b.prevX !== undefined ? b.prevX : b.x;
+    const ay = b.prevY !== undefined ? b.prevY : b.y;
+
     for (let p = 0; p < POCKETS.length; p++) {
       const pocket = POCKETS[p];
-      const d = dist(b, pocket);
-      if (d < pocket.r) {
+      // Swept test: closest approach of this step's path to the pocket centre. A point
+      // test could straddle the mouth at speed and let a ball skip over the pocket.
+      const d = distToSegment(pocket, { x: ax, y: ay }, { x: b.x, y: b.y });
+      if (d <= pocket.r) {
         b.pocketed = true;
         b.inPlay = false;
         b.pocketedInto = pocket.id;
@@ -100,18 +136,16 @@ export function step(state, dt = CFG.DT) {
     const b = balls[i];
     if (!b.inPlay) continue;
 
-    // Check if ball is near any pocket mouth (skip wall check if within pocket.r * 1.4)
-    let nearPocketMouth = false;
-    for (let p = 0; p < POCKETS.length; p++) {
-      if (dist(b, POCKETS[p]) < POCKETS[p].r * 1.4) {
-        nearPocketMouth = true;
-        break;
-      }
-    }
-    if (nearPocketMouth) continue;
+    // The cushions near a pocket are transparent only to a ball that is genuinely
+    // dropping in - one already at the mouth whose current path passes inside the
+    // capture radius. Suppressing the cushions for anything merely NEAR a pocket let
+    // fast balls travelling along a rail sail straight out through the jaw.
+    const entering = isEnteringPocket(b);
+    const openLeftRight = entering;
+    const openTopBottom = entering;
 
     // Left cushion
-    if (b.x - r < 0) {
+    if (!openLeftRight && b.x - r < 0) {
       b.x = r;
       const vn = -b.vx;
       b.vx = vn * CFG.CUSHION_RESTITUTION;
@@ -123,7 +157,7 @@ export function step(state, dt = CFG.DT) {
       events.push({ type: "cushion", ball: b, speed: Math.abs(vn) });
     }
     // Right cushion
-    else if (b.x + r > CFG.TABLE_W) {
+    else if (!openLeftRight && b.x + r > CFG.TABLE_W) {
       b.x = CFG.TABLE_W - r;
       const vn = b.vx;
       b.vx = -vn * CFG.CUSHION_RESTITUTION;
@@ -136,7 +170,7 @@ export function step(state, dt = CFG.DT) {
     }
 
     // Top cushion
-    if (b.y - r < 0) {
+    if (!openTopBottom && b.y - r < 0) {
       b.y = r;
       const vn = -b.vy;
       b.vy = vn * CFG.CUSHION_RESTITUTION;
@@ -148,7 +182,7 @@ export function step(state, dt = CFG.DT) {
       events.push({ type: "cushion", ball: b, speed: Math.abs(vn) });
     }
     // Bottom cushion
-    else if (b.y + r > CFG.TABLE_H) {
+    else if (!openTopBottom && b.y + r > CFG.TABLE_H) {
       b.y = CFG.TABLE_H - r;
       const vn = b.vy;
       b.vy = -vn * CFG.CUSHION_RESTITUTION;
@@ -158,6 +192,21 @@ export function step(state, dt = CFG.DT) {
         cue.spin.x *= 0.5;
       }
       events.push({ type: "cushion", ball: b, speed: Math.abs(vn) });
+    }
+  }
+
+  // 5b. Containment backstop. Nothing should ever get past the jaws, but if a
+  // pathological bounce ever puts a ball outside the slate we recover it rather
+  // than letting it fly off and stall the shot on the settle timeout.
+  const ESCAPE = CFG.POCKET_R_CORNER + r;
+  for (let i = 0; i < numBalls; i++) {
+    const b = balls[i];
+    if (!b.inPlay) continue;
+    if (b.x < -ESCAPE || b.x > CFG.TABLE_W + ESCAPE || b.y < -ESCAPE || b.y > CFG.TABLE_H + ESCAPE) {
+      b.x = Math.min(CFG.TABLE_W - r, Math.max(r, b.x));
+      b.y = Math.min(CFG.TABLE_H - r, Math.max(r, b.y));
+      b.vx *= 0.3;
+      b.vy *= 0.3;
     }
   }
 
@@ -177,17 +226,53 @@ export function step(state, dt = CFG.DT) {
 
       if (d >= minD || d === 0) continue;
 
-      // Normal unit vector from a to b
-      const nx = dx / d;
-      const ny = dy / d;
-
-      // Relative velocity
+      // Relative velocity is unchanged by rewinding, so it can be taken up front.
       const rvx = b.vx - a.vx;
       const rvy = b.vy - a.vy;
+
+      // Rewind the pair to the exact instant of contact before resolving. By the time
+      // an overlap is visible the balls have already interpenetrated by up to
+      // MAX_SPEED * DT, and resolving at that position tilts the contact normal - which
+      // threw cut shots off by as much as 20 degrees at full power, for the aim line,
+      // the player and the AI's own simulation alike.
+      let toi = 0;
+      const relSq = rvx * rvx + rvy * rvy;
+      if (relSq > 1e-9) {
+        const bCoef = 2 * (dx * rvx + dy * rvy);
+        const cCoef = dx * dx + dy * dy - minD * minD;
+        const disc = bCoef * bCoef - 4 * relSq * cCoef;
+        if (disc > 0) {
+          const t = (-bCoef - Math.sqrt(disc)) / (2 * relSq);
+          // Only ever step backwards, and never further than the step we just took.
+          if (t < 0 && t > -dt) toi = t;
+        }
+      }
+      if (toi < 0) {
+        a.x += a.vx * toi;
+        a.y += a.vy * toi;
+        b.x += b.vx * toi;
+        b.y += b.vy * toi;
+      }
+
+      // Normal unit vector from a to b, measured at the true point of contact
+      const cdx = b.x - a.x;
+      const cdy = b.y - a.y;
+      const cd = Math.hypot(cdx, cdy) || minD;
+      const nx = cdx / cd;
+      const ny = cdy / cd;
+
       const velAlongNormal = rvx * nx + rvy * ny;
 
-      // If separating, skip impulse
-      if (velAlongNormal > 0) continue;
+      // If separating, put the pair back where it was and skip the impulse
+      if (velAlongNormal > 0) {
+        if (toi < 0) {
+          a.x -= a.vx * toi;
+          a.y -= a.vy * toi;
+          b.x -= b.vx * toi;
+          b.y -= b.vy * toi;
+        }
+        continue;
+      }
 
       // Equal mass impulse calculation
       const impulse = -(1 + CFG.BALL_RESTITUTION) * velAlongNormal * 0.5;
@@ -198,14 +283,6 @@ export function step(state, dt = CFG.DT) {
       a.vy -= iy;
       b.vx += ix;
       b.vy += iy;
-
-      // Positional separation correction
-      const overlap = minD - d;
-      const push = overlap * 0.5 + CFG.SEPARATION_SLOP;
-      a.x -= nx * push;
-      a.y -= ny * push;
-      b.x += nx * push;
-      b.y += ny * push;
 
       // Cue Ball Spin Transfer on first contact
       const isCueCollision = (a.id === 0 || b.id === 0);
@@ -227,6 +304,28 @@ export function step(state, dt = CFG.DT) {
           cueBall.vy += follow.y + side.y;
           cueBall.spin.y = 0; // Follow/draw discharged on first hit
         }
+      }
+
+      // Replay the remainder of the step with the post-impact velocities, so the pair
+      // ends the step exactly where it would have without the discrete-step artefact.
+      if (toi < 0) {
+        a.x -= a.vx * toi;
+        a.y -= a.vy * toi;
+        b.x -= b.vx * toi;
+        b.y -= b.vy * toi;
+      }
+
+      // Any residual overlap (resting contact, or a rewind we could not take) is
+      // nudged apart so the pair does not re-collide on the next step.
+      const fdx = b.x - a.x;
+      const fdy = b.y - a.y;
+      const fd = Math.hypot(fdx, fdy);
+      if (fd > 0.0001 && fd < minD) {
+        const push = (minD - fd) * 0.5 + CFG.SEPARATION_SLOP;
+        a.x -= (fdx / fd) * push;
+        a.y -= (fdy / fd) * push;
+        b.x += (fdx / fd) * push;
+        b.y += (fdy / fd) * push;
       }
 
       events.push({

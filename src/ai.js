@@ -34,7 +34,11 @@ function testPathClearance(from, to, balls, ignoreIds = [], requiredRadius = CFG
 // Compute fast heuristic prior for a target and pocket (0..1)
 function computeShotPrior(cue, target, pocket, balls) {
   const toPocket = norm(sub(pocket, target));
-  const ghostPos = sub(pocket, mul(toPocket, CFG.BALL_R * 2));
+  // Ghost ball: the cue ball's position at contact, one ball-diameter behind the
+  // TARGET along the target-to-pocket line. Measuring it back from the pocket instead
+  // put the aim point next to the pocket, so the AI was effectively aiming at the
+  // hole rather than at the ball and only ever potted by accident.
+  const ghostPos = sub(target, mul(toPocket, CFG.BALL_R * 2));
   const toGhost = sub(ghostPos, cue);
   const aim = norm(toGhost);
 
@@ -114,6 +118,7 @@ function simulateShot(state, shot) {
   cue.vx = dir.x * speed;
   cue.vy = dir.y * speed;
   cue.spin = { ...shot.spin };
+  simState.firstContactMade = false;
 
   const report = createShotReport();
   let steps = 0;
@@ -308,6 +313,9 @@ export async function chooseShot(state, difficultyDef, rng) {
     });
 
     for (let s = 0; s < safetyCandidates.length; s++) {
+      // Safety search shares the same wall-clock budget - without this a crowded
+      // table could run dozens of full physics sims and stall a low-end device.
+      if (performance.now() - startTime > CFG.AI_TIME_BUDGET_MS * 2) break;
       const sCand = safetyCandidates[s];
       const { report, simState } = simulateShot(state, sCand);
       const foul = report.cueScratched || report.firstContact === null;
