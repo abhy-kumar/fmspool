@@ -1,7 +1,7 @@
 import { CFG, DIFFICULTY } from "../config.js";
 import { PAL } from "../palette.js";
 import { SPRITES, AI_PERSONALITIES } from "../sprites.js";
-import { createMatchState, createShotReport, processPhysicsEvents, evaluateShot, countRemaining } from "../rules.js";
+import { createMatchState, createShotReport, processPhysicsEvents, evaluateShot, countRemaining, getBallGroup } from "../rules.js";
 import { step, allAtRest } from "../physics.js";
 import { renderTable, renderBalls, renderCueStick, renderAimAssist, renderCRTEffect, physToPx, pxToPhys } from "../render.js";
 import { InputController } from "../input.js";
@@ -101,7 +101,6 @@ export const matchScene = {
       }
 
       if (this.state.shotClock <= 0) {
-        // Shot clock expired foul
         audio.playSfx("foul");
         const shooter = this.state.turn;
         const opponent = shooter === "PLAYER" ? "AI" : "PLAYER";
@@ -129,11 +128,9 @@ export const matchScene = {
     if (this.state.phase === "SHOT_RESOLVING") {
       this.shotTimer += dt;
 
-      // Fixed physics substeps
       const events = step(this.state, dt);
       if (events.length > 0) {
         processPhysicsEvents(this.shotReport, events, this.state);
-        // Play SFX
         events.forEach((ev) => {
           if (ev.type === "ballHit") {
             audio.playSfx("ballHit", { speed: ev.speed });
@@ -145,9 +142,7 @@ export const matchScene = {
         });
       }
 
-      // Settling condition or hard timeout
       if (allAtRest(this.state) || this.shotTimer >= CFG.SETTLE_TIMEOUT_S) {
-        // Force all ball velocities to rest
         this.state.balls.forEach((b) => { b.vx = 0; b.vy = 0; });
         this.finishShot();
       }
@@ -158,7 +153,6 @@ export const matchScene = {
     const diff = DIFFICULTY[this.difficultyId] || DIFFICULTY.AMATEUR;
     const rng = makeRng(this.state.seed + this.state.shotIndex * 31);
 
-    // AI Ball-in-Hand
     if (this.state.phase === "BALL_IN_HAND" || this.state.phase === "PLACE_CUE_BREAK") {
       const pos = chooseBallInHand(this.state, diff, rng);
       const cue = this.state.balls[0];
@@ -186,7 +180,6 @@ export const matchScene = {
       this.aiThinkingTotal = (CFG.AI_THINK_MIN_MS + rng() * (CFG.AI_THINK_MAX_MS - CFG.AI_THINK_MIN_MS)) / 1000;
       this.aiThinkingTimer = 0;
 
-      // Run AI Search
       chooseShot(this.state, diff, rng).then((shot) => {
         this.aiPlannedShot = shot;
         if (shot.kind === "SAFETY") {
@@ -201,7 +194,7 @@ export const matchScene = {
         this.aiAnimProgress = 0;
       }
     } else if (this.aiPhase === "ROTATING") {
-      this.aiAnimProgress += dt / 0.35; // 350ms rotation
+      this.aiAnimProgress += dt / 0.35;
       const t = Math.min(1, this.aiAnimProgress);
       this.aiCueAngle = lerpAngle(this.aiCueAngle, this.aiPlannedShot.angle, t);
 
@@ -210,7 +203,7 @@ export const matchScene = {
         this.aiAnimProgress = 0;
       }
     } else if (this.aiPhase === "PULLBACK") {
-      this.aiAnimProgress += dt / 0.25; // 250ms pull-back
+      this.aiAnimProgress += dt / 0.25;
       const t = Math.min(1, this.aiAnimProgress);
       this.aiCuePower = this.aiPlannedShot.power * t;
 
@@ -296,7 +289,6 @@ export const matchScene = {
 
     saveImmediate(save);
 
-    // Check Top 10 Entry
     const qualifies = await checkQualifiesTop10(res.score);
     if (qualifies || !save.displayName || save.displayName === "PLAYER") {
       this.arcadeKeyboard = new ArcadeKeyboard(save.displayName, (enteredName) => {
@@ -353,8 +345,8 @@ export const matchScene = {
       });
     }
 
-    // 3. Render Balls
-    renderBalls(ctx, this.state.balls);
+    // 3. Render Balls with legal target pulsing halos
+    renderBalls(ctx, this.state.balls, this.state);
 
     // 4. Render Aim Assist & Cue Stick
     const settings = loadSettings();
@@ -395,8 +387,6 @@ export const matchScene = {
 
   renderHUD(ctx) {
     const save = loadSave();
-    const pRating = save.runScores ? save.runScores[0] || 400 : 400;
-    const pTier = getTier(pRating);
 
     // HUD Background
     ctx.fillStyle = PAL.DARKEST;
@@ -410,45 +400,81 @@ export const matchScene = {
     ctx.font = '8px "Press Start 2P", monospace';
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    ctx.fillText(save.displayName || "PLAYER", 8, 8);
+    ctx.fillText(save.displayName || "PLAYER", 8, 6);
 
-    // Group indicator & dots
+    // Group indicator & remaining balls dots
     const pGroup = this.state.groups.PLAYER;
     if (pGroup) {
       const gBallId = pGroup === "SOLIDS" ? 1 : 9;
-      if (SPRITES.balls[gBallId]) ctx.drawImage(SPRITES.balls[gBallId][0], 8, 22);
+      if (SPRITES.balls[gBallId]) ctx.drawImage(SPRITES.balls[gBallId][0], 8, 18);
       ctx.fillStyle = PAL.SILVER;
-      ctx.fillText(`${pGroup}`, 22, 23);
+      ctx.fillText(`${pGroup}`, 22, 19);
+
+      // Remaining balls dots
+      const startBall = pGroup === "SOLIDS" ? 1 : 9;
+      const endBall = pGroup === "SOLIDS" ? 7 : 15;
+      let dotX = 8;
+      for (let bId = startBall; bId <= endBall; bId++) {
+        const bObj = this.state.balls[bId];
+        const isPotted = !bObj || !bObj.inPlay;
+        ctx.fillStyle = isPotted ? PAL.DARK : (pGroup === "SOLIDS" ? PAL.YELLOW : PAL.BLUE);
+        ctx.fillRect(dotX, 32, 6, 6);
+        ctx.strokeStyle = PAL.SLATE;
+        ctx.strokeRect(dotX, 32, 6, 6);
+        dotX += 9;
+      }
+      // 8-ball dot
+      const eightObj = this.state.balls[8];
+      const eightPotted = !eightObj || !eightObj.inPlay;
+      ctx.fillStyle = eightPotted ? PAL.DARK : PAL.DARKEST;
+      ctx.fillRect(dotX + 3, 32, 6, 6);
+      ctx.strokeStyle = PAL.BRASS;
+      ctx.strokeRect(dotX + 3, 32, 6, 6);
     } else {
-      ctx.fillStyle = PAL.GREY;
-      ctx.fillText("OPEN", 8, 23);
+      ctx.fillStyle = PAL.GREEN;
+      ctx.fillText("OPEN TABLE", 8, 20);
+      ctx.fillStyle = PAL.SILVER;
+      ctx.fillText("ANY BALL (EXCEPT 8)", 8, 32);
     }
 
     // AI Block (Right)
     const aiDef = AI_PERSONALITIES.find((a) => a.tier === this.difficultyId) || AI_PERSONALITIES[0];
     const portrait = SPRITES.portraits[aiDef.name];
     if (portrait) {
-      ctx.drawImage(portrait, CFG.BASE_W - 24, 6);
+      ctx.drawImage(portrait, CFG.BASE_W - 22, 6);
     }
 
     ctx.fillStyle = this.state.turn === "AI" ? PAL.CYAN : PAL.WHITE;
     ctx.textAlign = "right";
-    ctx.fillText(aiDef.name, CFG.BASE_W - 30, 8);
+    ctx.fillText(aiDef.name, CFG.BASE_W - 26, 6);
 
     const aiGroup = this.state.groups.AI;
     if (aiGroup) {
       ctx.fillStyle = PAL.SILVER;
-      ctx.fillText(`${aiGroup}`, CFG.BASE_W - 30, 23);
+      ctx.fillText(`${aiGroup}`, CFG.BASE_W - 26, 19);
+
+      const startBall = aiGroup === "SOLIDS" ? 1 : 9;
+      const endBall = aiGroup === "SOLIDS" ? 7 : 15;
+      let dotX = CFG.BASE_W - 26;
+      for (let bId = endBall; bId >= startBall; bId--) {
+        const bObj = this.state.balls[bId];
+        const isPotted = !bObj || !bObj.inPlay;
+        ctx.fillStyle = isPotted ? PAL.DARK : (aiGroup === "SOLIDS" ? PAL.YELLOW : PAL.BLUE);
+        ctx.fillRect(dotX - 6, 32, 6, 6);
+        ctx.strokeStyle = PAL.SLATE;
+        ctx.strokeRect(dotX - 6, 32, 6, 6);
+        dotX -= 9;
+      }
     } else {
       ctx.fillStyle = PAL.GREY;
-      ctx.fillText("OPEN", CFG.BASE_W - 30, 23);
+      ctx.fillText("OPEN", CFG.BASE_W - 26, 20);
     }
 
-    // Center: Shot Clock Bar (60x6 px)
+    // Center: Shot Clock Bar
     const clockW = 60;
     const clockH = 6;
     const clockX = Math.round(CFG.BASE_W / 2 - clockW / 2);
-    const clockY = 8;
+    const clockY = 6;
     const clockFrac = clamp(this.state.shotClock / CFG.SHOT_CLOCK_S, 0, 1);
 
     ctx.fillStyle = PAL.DARK;
@@ -463,15 +489,14 @@ export const matchScene = {
     ctx.fillStyle = clockCol;
     ctx.fillRect(clockX + 1, clockY + 1, Math.round((clockW - 2) * clockFrac), clockH - 2);
 
-    // Message Line with 1px black outline
+    // Message Line with outline
     if (this.state.message && this.state.messageTimer > 0) {
       const msgX = Math.round(CFG.BASE_W / 2);
-      const msgY = 24;
+      const msgY = 22;
       ctx.font = '8px "Press Start 2P", monospace';
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
 
-      // Shadow/Outline
       ctx.fillStyle = PAL.BLACK;
       ctx.fillText(this.state.message, msgX + 1, msgY + 1);
       ctx.fillText(this.state.message, msgX - 1, msgY - 1);
@@ -495,7 +520,6 @@ export const matchScene = {
     ctx.textBaseline = "top";
     ctx.fillText(`FINAL SCORE: ${r.score}`, 256, 46);
 
-    // 6 Metrics breakdown
     const metrics = [
       { key: "VICTORY (V)", val: r.components.V },
       { key: "DOMINANCE (D)", val: r.components.D },
@@ -515,7 +539,6 @@ export const matchScene = {
       ctx.textAlign = "left";
       ctx.fillText(m.key, 60, my + 2);
 
-      // Bar
       ctx.fillStyle = PAL.DARKEST;
       ctx.fillRect(barStartX, my, barW, 10);
       ctx.strokeStyle = PAL.SLATE;
@@ -528,7 +551,6 @@ export const matchScene = {
       ctx.fillText(`${Math.round(m.val * 100)}%`, 430, my + 2);
     });
 
-    // Formula Line
     ctx.fillStyle = PAL.SILVER;
     ctx.textAlign = "center";
     const fStr = `S:${(r.components.composite).toFixed(2)} x DIFF:${r.diffMult.toFixed(2)} x MODE:${r.modeMult.toFixed(2)} = ${r.score}`;

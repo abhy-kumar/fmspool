@@ -83,6 +83,27 @@ export function countRemaining(balls, group) {
   return count;
 }
 
+// Helper to check if a specific ball is legal for first contact by shooter
+export function isBallLegalFirstContact(ballId, state, shooter = null) {
+  if (ballId === 0) return false;
+  const currentShooter = shooter || state.turn;
+  const shooterGroup = state.groups[currentShooter];
+
+  if (state.openTable || state.isBreakShot) {
+    // Open table: any ball is legal EXCEPT 8-ball
+    return ballId !== 8;
+  }
+
+  const remaining = countRemaining(state.balls, shooterGroup);
+  if (remaining > 0) {
+    // Must hit own group ball
+    return getBallGroup(ballId) === shooterGroup;
+  } else {
+    // Group cleared: must hit 8-ball
+    return ballId === 8;
+  }
+}
+
 // Accumulate events during a physics shot step
 export function processPhysicsEvents(report, events, state) {
   events.forEach((ev) => {

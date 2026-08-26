@@ -1,13 +1,13 @@
 import { CFG } from "./config.js";
 import { PAL } from "./palette.js";
 import { physToPx, pxToPhys } from "./render.js";
-import { clamp, lerpAngle, dist, fromAngle, mul, sub, add } from "./vec.js";
+import { clamp, lerpAngle, dist, fromAngle, mul, sub, add, dot } from "./vec.js";
 
 export class InputController {
   constructor() {
     this.aimAngle = 0;
     this.targetAimAngle = 0;
-    this.power = 0.3;
+    this.power = 0.35;
     this.spin = { x: 0, y: 0 }; // x: side spin (-1..1), y: top/back (-1..1)
 
     // Interaction states
@@ -17,22 +17,21 @@ export class InputController {
     this.isPullingBack = false;
     this.isPlacingBallInHand = false;
 
-    this.pullBackStart = null;
     this.ballInHandPos = { x: CFG.HEAD_SPOT.x, y: CFG.HEAD_SPOT.y };
     this.ballInHandValid = true;
 
     // Key states
     this.spaceCharging = false;
-    this.spaceChargeDir = 1;
     this.spaceChargeTime = 0;
     this.fineLeftHeld = false;
     this.fineRightHeld = false;
 
     // UI Regions (base pixels)
-    this.powerBarRect = { x: 486, y: 70, w: 14, h: 140 };
-    this.spinWidgetRect = { x: 466, y: 242, w: 36, h: 36 };
-    this.fineLeftBtn = { x: 8, y: 254, w: 20, h: 20 };
-    this.fineRightBtn = { x: 32, y: 254, w: 20, h: 20 };
+    this.powerBarRect = { x: 476, y: 60, w: 28, h: 130 };
+    this.shootBtn = { x: 474, y: 196, w: 32, h: 22 };
+    this.spinWidgetRect = { x: 470, y: 236, w: 36, h: 36 };
+    this.fineLeftBtn = { x: 8, y: 254, w: 22, h: 22 };
+    this.fineRightBtn = { x: 34, y: 254, w: 22, h: 22 };
     this.pauseBtn = { x: 8, y: 8, w: 22, h: 22 };
   }
 
@@ -64,6 +63,25 @@ export class InputController {
     }
   }
 
+  // Check if touch is on cue stick or cue ball
+  isTouchingCueStick(px, py, cue) {
+    if (!cue || !cue.inPlay) return false;
+    const cuePx = physToPx(cue.x, cue.y);
+    const aimDir = fromAngle(this.aimAngle);
+
+    const toPointer = sub({ x: px, y: py }, cuePx);
+    // Rear distance along opposite of aim vector (where cue stick is)
+    const rearDist = -(toPointer.x * aimDir.x + toPointer.y * aimDir.y);
+    // Perpendicular distance from cue stick line
+    const perpDist = Math.abs(toPointer.x * (-aimDir.y) - toPointer.y * (-aimDir.x));
+
+    // Cue ball circle (radius 14px) or cue stick rear corridor (up to 80px behind, 20px wide)
+    const onBall = Math.hypot(toPointer.x, toPointer.y) <= 18;
+    const onStick = rearDist >= -4 && rearDist <= 90 && perpDist <= 22;
+
+    return onBall || onStick;
+  }
+
   handlePointer(e, matchState, onShoot, onPause, onPlaceBall) {
     const cue = matchState.balls[0];
     const isHumanTurn = matchState.turn === "PLAYER";
@@ -88,6 +106,19 @@ export class InputController {
         return;
       }
 
+      // Check Dedicated SHOOT Button
+      if (this.isInside(px, py, this.shootBtn)) {
+        if (typeof onShoot === "function") {
+          onShoot({
+            angle: this.aimAngle,
+            power: this.power,
+            spin: { ...this.spin },
+          });
+          this.resetSpin();
+        }
+        return;
+      }
+
       // Check Fine Aim Buttons
       if (this.isInside(px, py, this.fineLeftBtn)) {
         this.targetAimAngle -= (0.15 * Math.PI) / 180;
@@ -107,25 +138,25 @@ export class InputController {
         return;
       }
 
-      // Check Power Bar
-      if (this.isInside(px, py, this.powerBarRect)) {
+      // Check Power Bar (generous touch zone)
+      if (this.isInside(px, py, this.powerBarRect) || (px >= 468 && px <= 512 && py >= 50 && py <= 194)) {
         this.isDraggingPower = true;
         this.updatePowerFromBar(py);
         return;
       }
 
-      // Check Pull-back on Cue Ball
-      if (cue && cue.inPlay) {
+      // Check Cue Stick / Cue Ball Pull-back (Crucial: Aim angle is LOCKED)
+      if (this.isTouchingCueStick(px, py, cue)) {
+        this.isPullingBack = true;
         const cuePx = physToPx(cue.x, cue.y);
-        const dToCue = Math.hypot(px - cuePx.x, py - cuePx.y);
-        if (dToCue < 18) {
-          this.isPullingBack = true;
-          this.pullBackStart = { x: px, y: py };
-          return;
-        }
+        const aimDir = fromAngle(this.aimAngle);
+        const toPointer = sub({ x: px, y: py }, cuePx);
+        const rearDist = Math.max(0, -(toPointer.x * aimDir.x + toPointer.y * aimDir.y));
+        this.power = clamp(rearDist / 70, CFG.MIN_POWER, CFG.MAX_POWER);
+        return;
       }
 
-      // Default: Coarse Aiming on table
+      // Default: Aiming on felt (ONLY when NOT touching cue stick or UI)
       if (cue && cue.inPlay && this.isInsidePlayfield(px, py)) {
         this.isDraggingAim = true;
         const cuePhys = { x: cue.x, y: cue.y };
@@ -141,13 +172,12 @@ export class InputController {
       } else if (this.isDraggingPower) {
         this.updatePowerFromBar(py);
       } else if (this.isPullingBack) {
-        // Drag away from aim direction
+        // Drag along cue stick line without changing angle
         const cuePx = physToPx(cue.x, cue.y);
         const aimDir = fromAngle(this.aimAngle);
-        const pointerVec = sub({ x: px, y: py }, cuePx);
-        // Project onto opposite of aim direction
-        const dragDist = -(pointerVec.x * aimDir.x + pointerVec.y * aimDir.y);
-        this.power = clamp(dragDist / 90, CFG.MIN_POWER, CFG.MAX_POWER);
+        const toPointer = sub({ x: px, y: py }, cuePx);
+        const rearDist = Math.max(0, -(toPointer.x * aimDir.x + toPointer.y * aimDir.y));
+        this.power = clamp(rearDist / 70, CFG.MIN_POWER, CFG.MAX_POWER);
       } else if (this.isDraggingAim && cue && cue.inPlay) {
         const cuePhys = { x: cue.x, y: cue.y };
         const pointerPhys = pxToPhys(px, py);
@@ -169,6 +199,7 @@ export class InputController {
 
       if (this.isPullingBack) {
         this.isPullingBack = false;
+        // Release to fire if pulled back with sufficient power
         if (this.power >= CFG.MIN_POWER && typeof onShoot === "function") {
           onShoot({
             angle: this.aimAngle,
@@ -252,7 +283,6 @@ export class InputController {
       sy /= len;
     }
 
-    // Snap to zero if very close to center
     if (len < 0.12) {
       sx = 0;
       sy = 0;
@@ -265,12 +295,10 @@ export class InputController {
     const phys = pxToPhys(px, py);
     const r = CFG.BALL_R;
 
-    // Bounds check
     let valid = true;
     let clampedX = clamp(phys.x, r, CFG.TABLE_W - r);
     let clampedY = clamp(phys.y, r, CFG.TABLE_H - r);
 
-    // Behind head string constraint if applicable
     if (matchState.ballInHandBehindLine) {
       if (clampedX > CFG.HEAD_STRING_X - r) {
         clampedX = CFG.HEAD_STRING_X - r;
@@ -278,7 +306,6 @@ export class InputController {
       }
     }
 
-    // Ball overlap check against in-play object balls
     for (let i = 1; i <= 15; i++) {
       const b = matchState.balls[i];
       if (!b || !b.inPlay) continue;
@@ -335,21 +362,27 @@ export class InputController {
     ctx.textBaseline = "middle";
     ctx.fillText("=", this.pauseBtn.x + this.pauseBtn.w / 2, this.pauseBtn.y + this.pauseBtn.h / 2);
 
-    // 3. Power Bar (7 discrete chunky retro segments)
+    // 3. Power Bar (Chunky retro segments + Drag indicator)
     const bar = this.powerBarRect;
-    // Outer border
     ctx.fillStyle = PAL.DARK;
     ctx.fillRect(bar.x - 2, bar.y - 2, bar.w + 4, bar.h + 4);
-    ctx.strokeStyle = PAL.SILVER;
+    ctx.strokeStyle = this.isDraggingPower || this.isPullingBack ? PAL.CYAN : PAL.SILVER;
+    ctx.lineWidth = 1;
     ctx.strokeRect(bar.x - 2, bar.y - 2, bar.w + 4, bar.h + 4);
 
-    const numSegments = 7;
-    const segH = Math.floor((bar.h - 6) / numSegments);
+    // Header label
+    ctx.fillStyle = PAL.SILVER;
+    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.textAlign = "center";
+    ctx.fillText("PWR", bar.x + bar.w / 2, bar.y - 8);
+
+    const numSegments = 8;
+    const segH = Math.floor((bar.h - 8) / numSegments);
     const activeSegments = Math.round(this.power * numSegments);
 
     for (let s = 0; s < numSegments; s++) {
       const segIndexFromBottom = numSegments - 1 - s;
-      const segY = bar.y + 3 + segIndexFromBottom * (segH + 1);
+      const segY = bar.y + 4 + segIndexFromBottom * (segH + 1);
       const isActive = s < activeSegments;
 
       let segColor = PAL.DARKEST;
@@ -360,10 +393,23 @@ export class InputController {
       }
 
       ctx.fillStyle = segColor;
-      ctx.fillRect(bar.x, segY, bar.w, segH);
+      ctx.fillRect(bar.x + 2, segY, bar.w - 4, segH);
     }
 
-    // 4. Spin Control Widget (34x34 cue ball disc)
+    // 4. Dedicated SHOOT Button
+    const sb = this.shootBtn;
+    ctx.fillStyle = this.isPullingBack ? PAL.RED : PAL.GREEN;
+    ctx.fillRect(sb.x, sb.y, sb.w, sb.h);
+    ctx.strokeStyle = PAL.WHITE;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sb.x, sb.y, sb.w, sb.h);
+    ctx.fillStyle = PAL.DARKEST;
+    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("HIT", sb.x + sb.w / 2, sb.y + sb.h / 2);
+
+    // 5. Spin Control Widget (34x34 cue ball disc)
     const sw = this.spinWidgetRect;
     ctx.fillStyle = PAL.DARK;
     ctx.fillRect(sw.x, sw.y, sw.w, sw.h);
@@ -373,7 +419,6 @@ export class InputController {
 
     const scx = sw.x + sw.w / 2;
     const scy = sw.y + sw.h / 2;
-    // Cue disc
     ctx.fillStyle = PAL.WHITE;
     ctx.beginPath();
     ctx.arc(scx, scy, 14, 0, Math.PI * 2);
@@ -381,13 +426,12 @@ export class InputController {
     ctx.strokeStyle = PAL.SILVER;
     ctx.stroke();
 
-    // Red spin marker (3x3)
     const markerX = scx + this.spin.x * 12;
     const markerY = scy - this.spin.y * 12;
     ctx.fillStyle = PAL.RED;
     ctx.fillRect(Math.round(markerX - 1.5), Math.round(markerY - 1.5), 3, 3);
 
-    // 5. Ball-in-Hand Ghost Placement Display
+    // 6. Ball-in-Hand Ghost Placement Display
     if (this.isPlacingBallInHand || matchState.phase === "BALL_IN_HAND" || matchState.phase === "PLACE_CUE_BREAK") {
       const gpx = physToPx(this.ballInHandPos.x, this.ballInHandPos.y);
       ctx.strokeStyle = this.ballInHandValid ? PAL.CYAN : PAL.RED;
