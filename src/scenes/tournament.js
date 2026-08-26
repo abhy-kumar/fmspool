@@ -34,7 +34,12 @@ export const tournamentScene = {
   update(dt) {},
 
   render(ctx) {
-    ctx.fillStyle = PAL.BLACK;
+    const bgGrad = ctx.createRadialGradient(256, 144, 40, 256, 144, 280);
+    bgGrad.addColorStop(0, "#161130");
+    bgGrad.addColorStop(0.6, "#0e0a21");
+    bgGrad.addColorStop(1, "#07050e");
+
+    ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
 
     if (this.viewMode === "CUP_SELECT") {
@@ -78,11 +83,32 @@ export const tournamentScene = {
 
       renderPanel(ctx, cx, cy, cardW, cardH, cup.name);
 
-      // Cup Badge / Icon
-      ctx.fillStyle = cup.badgeColor;
-      ctx.fillRect(cx + 43, cy + 24, 24, 24);
-      ctx.fillStyle = PAL.WHITE;
-      ctx.fillRect(cx + 51, cy + 32, 8, 8);
+      // 32-Bit Metallic Trophy Cup Icon
+      const cupX = cx + 43;
+      const cupY = cy + 24;
+      const tGrad = ctx.createLinearGradient(cupX, cupY, cupX + 24, cupY + 24);
+      if (key === "BRONZE") { tGrad.addColorStop(0, "#ffaa55"); tGrad.addColorStop(1, "#803800"); }
+      else if (key === "SILVER") { tGrad.addColorStop(0, "#ffffff"); tGrad.addColorStop(1, "#7b8ea6"); }
+      else if (key === "GOLD") { tGrad.addColorStop(0, "#ffea75"); tGrad.addColorStop(1, "#c98f00"); }
+      else if (key === "CHAMPION") { tGrad.addColorStop(0, "#ff5599"); tGrad.addColorStop(1, "#800040"); }
+
+      ctx.fillStyle = tGrad;
+      // Trophy Bowl
+      ctx.beginPath();
+      ctx.moveTo(cupX + 2, cupY + 2);
+      ctx.lineTo(cupX + 22, cupY + 2);
+      ctx.lineTo(cupX + 18, cupY + 14);
+      ctx.lineTo(cupX + 6, cupY + 14);
+      ctx.closePath();
+      ctx.fill();
+
+      // Stem & Base
+      ctx.fillRect(cupX + 10, cupY + 14, 4, 6);
+      ctx.fillRect(cupX + 5, cupY + 20, 14, 4);
+
+      // Specular highlight gleam
+      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.fillRect(cupX + 5, cupY + 4, 3, 5);
 
       // Details
       ctx.fillStyle = isUnlocked ? PAL.WHITE : PAL.GREY;

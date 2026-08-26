@@ -16,9 +16,12 @@ export const titleScene = {
   selectedItem: 0,
   shimmerTimer: 0,
   bgBalls: [
-    { x: 80, y: 120, vx: 25, vy: 18, id: 1 },
-    { x: 300, y: 200, vx: -20, vy: 22, id: 9 },
-    { x: 420, y: 80, vx: 18, vy: -26, id: 8 },
+    { x: 60, y: 70, vx: 22, vy: 14, id: 1 },
+    { x: 440, y: 90, vx: -18, vy: 20, id: 9 },
+    { x: 120, y: 220, vx: 25, vy: -18, id: 3 },
+    { x: 380, y: 200, vx: -20, vy: -16, id: 2 },
+    { x: 256, y: 140, vx: 15, vy: -22, id: 8 },
+    { x: 480, y: 240, vx: -24, vy: 12, id: 5 },
   ],
   difficultyModalOpen: false,
   howToPlayOpen: false,
@@ -39,13 +42,13 @@ export const titleScene = {
     const items = [];
 
     if (hasContinue) {
-      items.push({ id: "CONTINUE", label: "CONTINUE MATCH" });
+      items.push({ id: "CONTINUE", label: "CONTINUE MATCH", color: PAL.GREEN });
     }
-    items.push({ id: "QUICK", label: "QUICK MATCH" });
-    items.push({ id: "TOURNAMENT", label: "TOURNAMENT" });
-    items.push({ id: "LEADERBOARD", label: "LEADERBOARD" });
-    items.push({ id: "HOWTO", label: "HOW TO PLAY" });
-    items.push({ id: "SETTINGS", label: "SETTINGS" });
+    items.push({ id: "QUICK", label: "QUICK MATCH", color: PAL.CYAN });
+    items.push({ id: "TOURNAMENT", label: "TOURNAMENT CUPS", color: PAL.GOLD });
+    items.push({ id: "LEADERBOARD", label: "GLOBAL RANKINGS", color: PAL.MAGENTA });
+    items.push({ id: "HOWTO", label: "HOW TO PLAY", color: PAL.SILVER });
+    items.push({ id: "SETTINGS", label: "SETTINGS & CUES", color: PAL.GREY });
 
     this.menuItems = items;
     this.selectedItem = 0;
@@ -54,59 +57,95 @@ export const titleScene = {
   update(dt) {
     this.shimmerTimer += dt;
 
-    // Update drifting background balls
+    // Smoothly bounce drifting 3D background billiard balls
     this.bgBalls.forEach((b) => {
       b.x += b.vx * dt;
       b.y += b.vy * dt;
-      if (b.x < 10) { b.x = 10; b.vx = -b.vx; }
-      if (b.x > CFG.BASE_W - 10) { b.x = CFG.BASE_W - 10; b.vx = -b.vx; }
-      if (b.y < 10) { b.y = 10; b.vy = -b.vy; }
-      if (b.y > CFG.BASE_H - 10) { b.y = CFG.BASE_H - 10; b.vy = -b.vy; }
+      if (b.x < 14) { b.x = 14; b.vx = Math.abs(b.vx); }
+      if (b.x > CFG.BASE_W - 14) { b.x = CFG.BASE_W - 14; b.vx = -Math.abs(b.vx); }
+      if (b.y < 14) { b.y = 14; b.vy = Math.abs(b.vy); }
+      if (b.y > CFG.BASE_H - 14) { b.y = CFG.BASE_H - 14; b.vy = -Math.abs(b.vy); }
     });
   },
 
   render(ctx) {
-    // 1. Dark felt background with drifting balls
-    ctx.fillStyle = PAL.BLACK;
+    // 1. Deep Luxury Indigo Felt Background
+    const bgGrad = ctx.createRadialGradient(256, 144, 40, 256, 144, 280);
+    bgGrad.addColorStop(0, "#161130");
+    bgGrad.addColorStop(0.6, "#0e0a21");
+    bgGrad.addColorStop(1, "#07050e");
+
+    ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
 
-    // Drifting animated balls behind semi-transparent dark plate
+    // 2. Render Drifting 3D Billiard Balls in Background
     this.bgBalls.forEach((b) => {
+      // Soft radial shadow under drifting ball
+      if (SPRITES.ballShadow) {
+        ctx.drawImage(SPRITES.ballShadow, Math.round(b.x - 7), Math.round(b.y - 2));
+      }
       const sprite = SPRITES.balls[b.id] ? SPRITES.balls[b.id][0] : null;
       if (sprite) {
-        ctx.drawImage(sprite, Math.round(b.x - 4.5), Math.round(b.y - 4.5));
+        ctx.drawImage(sprite, Math.round(b.x - 6), Math.round(b.y - 6));
       }
     });
 
-    // Dark tint panel over background
-    ctx.fillStyle = "rgba(22, 19, 31, 0.82)";
+    // Dark semi-transparent atmospheric overlay plate
+    ctx.fillStyle = "rgba(10, 8, 20, 0.76)";
     ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
 
-    // 2. FMS POOL Main Title Logo (16px + drop shadow + shimmer)
+    // 3. 32-Bit 3D Arcade Logo ("FMS POOL")
     const logoX = 256;
-    const logoY = 32;
+    const logoY = 36;
 
-    // Red drop shadow
-    ctx.fillStyle = PAL.RED_DARK;
-    ctx.font = '16px "Press Start 2P", monospace';
+    // Deep Crimson & Obsidian 3D Extrusion Shadows
+    ctx.font = 'bold 20px "Press Start 2P", monospace';
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("FMS POOL", logoX + 1, logoY + 1);
 
-    // Shimmer effect (sweeps every 3s)
-    const shimmerCycle = (this.shimmerTimer % 3.0) / 3.0;
-    const isShimmer = shimmerCycle > 0.8 && shimmerCycle < 0.95;
-    ctx.fillStyle = isShimmer ? PAL.WHITE : PAL.BRASS;
+    for (let s = 4; s >= 1; s--) {
+      ctx.fillStyle = s >= 3 ? "#420914" : "#801226";
+      ctx.fillText("FMS POOL", logoX + s, logoY + s);
+    }
+
+    // Front Face: Rich Metallic Gold Gradient with Chrome Shimmer
+    const goldGrad = ctx.createLinearGradient(0, logoY - 10, 0, logoY + 10);
+    const shimmerProgress = (this.shimmerTimer % 2.6) / 2.6;
+    const isShimmer = shimmerProgress > 0.8 && shimmerProgress < 0.96;
+
+    if (isShimmer) {
+      goldGrad.addColorStop(0, "#ffffff");
+      goldGrad.addColorStop(0.5, "#fff3b3");
+      goldGrad.addColorStop(1, "#ffd000");
+    } else {
+      goldGrad.addColorStop(0, "#fff5b8");
+      goldGrad.addColorStop(0.4, "#ffd000");
+      goldGrad.addColorStop(0.8, "#d49b00");
+      goldGrad.addColorStop(1, "#8a6000");
+    }
+
+    ctx.fillStyle = goldGrad;
     ctx.fillText("FMS POOL", logoX, logoY);
 
-    // Subtitle
+    // Polished Subtitle Banner
     ctx.fillStyle = PAL.CYAN;
     ctx.font = '8px "Press Start 2P", monospace';
-    ctx.fillText("CLASSIC 8-BALL BILLIARDS", logoX, logoY + 20);
+    ctx.fillText("CLASSIC 8-BALL BILLIARDS", logoX, logoY + 22);
 
-    // 3. Menu Items
-    const startY = 86;
-    const btnW = 200;
+    // Top Fullscreen Button
+    const isFs = !!document.fullscreenElement;
+    renderButton(ctx, { x: 406, y: 10, w: 96, h: 20 }, isFs ? "WINDOW" : "FULLSCREEN", false);
+
+    // Offline Tag if disconnected
+    if (getIsOffline()) {
+      ctx.fillStyle = PAL.RED;
+      ctx.textAlign = "left";
+      ctx.fillText("! OFFLINE", 12, 18);
+    }
+
+    // 4. Polished 32-Bit Menu Buttons
+    const startY = 88;
+    const btnW = 216;
     const btnH = 22;
     const gap = 6;
 
@@ -115,13 +154,17 @@ export const titleScene = {
       const by = startY + idx * (btnH + gap);
       const isSelected = idx === this.selectedItem;
 
-      ctx.fillStyle = isSelected ? PAL.GREY : PAL.SLATE;
+      // Card Body
+      ctx.fillStyle = isSelected ? "#2d2454" : "#191430";
       ctx.fillRect(bx, by, btnW, btnH);
-      ctx.strokeStyle = isSelected ? PAL.CYAN : PAL.SILVER;
-      ctx.lineWidth = 1;
+
+      // Card Bevel & Borders
+      ctx.strokeStyle = isSelected ? PAL.CYAN : "#3c3363";
+      ctx.lineWidth = isSelected ? 1.5 : 1;
       ctx.strokeRect(bx, by, btnW, btnH);
 
-      const blink = isSelected && Math.floor(this.shimmerTimer * 3.3) % 2 === 0;
+      // Active Selection Chevron and Glow
+      const blink = isSelected && Math.floor(this.shimmerTimer * 4) % 2 === 0;
       const labelText = (isSelected ? (blink ? "> " : "  ") : "") + item.label;
 
       ctx.fillStyle = isSelected ? PAL.WHITE : PAL.SILVER;
@@ -131,16 +174,16 @@ export const titleScene = {
       ctx.fillText(labelText, logoX, by + btnH / 2);
     });
 
-    // 4. Bottom Player Stats Bar
+    // 5. Bottom Player Profile & Career Showcase Bar
     const save = loadSave();
     const rating = playerRating(save.runScores);
     const tier = getTier(rating);
 
     ctx.fillStyle = PAL.DARKEST;
-    ctx.fillRect(0, CFG.BASE_H - 24, CFG.BASE_W, 24);
+    ctx.fillRect(0, CFG.BASE_H - 26, CFG.BASE_W, 26);
     ctx.strokeStyle = PAL.SLATE;
     ctx.lineWidth = 1;
-    ctx.strokeRect(0, CFG.BASE_H - 24, CFG.BASE_W, 24);
+    ctx.strokeRect(0, CFG.BASE_H - 26, CFG.BASE_W, 26);
 
     // Player Name & Discriminator
     const formattedName = formatWithDiscriminator(save.displayName, save.playerId);
@@ -148,39 +191,29 @@ export const titleScene = {
     ctx.font = '8px "Press Start 2P", monospace';
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText(formattedName, 12, CFG.BASE_H - 12);
+    ctx.fillText(formattedName, 12, CFG.BASE_H - 13);
 
-    // Tier badge
+    // Tier Metallic Shield Badge
     const badge = SPRITES.tierBadges[tier.id];
     if (badge) {
-      ctx.drawImage(badge, 180, CFG.BASE_H - 16);
+      ctx.drawImage(badge, 178, CFG.BASE_H - 18);
     }
-    ctx.fillStyle = tier.badgeColor || PAL.BRASS;
-    ctx.fillText(tier.name, 194, CFG.BASE_H - 12);
+    ctx.fillStyle = tier.badgeColor || PAL.GOLD;
+    ctx.fillText(tier.name, 194, CFG.BASE_H - 13);
 
     // Rating & Coins
     ctx.fillStyle = PAL.CYAN;
-    ctx.fillText(`RATING: ${rating}`, 300, CFG.BASE_H - 12);
-    ctx.fillStyle = PAL.YELLOW;
-    ctx.fillText(`COINS: ${save.coins || 0}`, 404, CFG.BASE_H - 12);
+    ctx.fillText(`RATING: ${rating}`, 296, CFG.BASE_H - 13);
 
-    // Top Fullscreen Button
-    const isFs = !!document.fullscreenElement;
-    renderButton(ctx, { x: 412, y: 12, w: 88, h: 18 }, isFs ? "WINDOW" : "FULLSCRN", false);
+    ctx.fillStyle = PAL.GOLD;
+    ctx.fillText(`COINS: ${save.coins || 0}`, 404, CFG.BASE_H - 13);
 
-    // Offline Tag
-    if (getIsOffline()) {
-      ctx.fillStyle = PAL.RED;
-      ctx.textAlign = "right";
-      ctx.fillText("! OFFLINE", 400, 20);
-    }
-
-    // 5. Difficulty Modal Overlay
+    // 6. Difficulty Modal Overlay
     if (this.difficultyModalOpen) {
       this.renderDifficultyModal(ctx);
     }
 
-    // 6. How To Play Modal Overlay
+    // 7. How To Play Modal Overlay
     if (this.howToPlayOpen) {
       this.renderHowToPlayModal(ctx);
     }
@@ -189,24 +222,24 @@ export const titleScene = {
   },
 
   renderDifficultyModal(ctx) {
-    ctx.fillStyle = "rgba(5, 4, 9, 0.85)";
+    ctx.fillStyle = "rgba(7, 5, 14, 0.88)";
     ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
 
-    renderPanel(ctx, 116, 40, 280, 200, "SELECT DIFFICULTY");
+    renderPanel(ctx, 116, 36, 280, 210, "SELECT DIFFICULTY");
 
     const diffs = [DIFFICULTY.ROOKIE, DIFFICULTY.AMATEUR, DIFFICULTY.PRO, DIFFICULTY.LEGEND];
-    const startY = 70;
+    const startY = 66;
 
     diffs.forEach((d, i) => {
       const by = startY + i * 36;
       renderButton(ctx, { x: 136, y: by, w: 240, h: 28 }, `${d.label} (${d.mult.toFixed(2)}x)`, false);
     });
 
-    renderButton(ctx, { x: 206, y: 214, w: 100, h: 20 }, "CANCEL", false);
+    renderButton(ctx, { x: 206, y: 216, w: 100, h: 22 }, "CANCEL", false);
   },
 
   renderHowToPlayModal(ctx) {
-    ctx.fillStyle = "rgba(5, 4, 9, 0.88)";
+    ctx.fillStyle = "rgba(7, 5, 14, 0.90)";
     ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
 
     const pages = [
@@ -260,7 +293,7 @@ export const titleScene = {
     if (e.type !== "pointerdown") return;
 
     // Fullscreen Toggle
-    if (e.x >= 412 && e.x <= 500 && e.y >= 12 && e.y <= 30) {
+    if (e.x >= 406 && e.x <= 502 && e.y >= 10 && e.y <= 30) {
       audio.playSfx("uiSelect");
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().catch(() => {});
@@ -286,7 +319,7 @@ export const titleScene = {
 
     if (this.difficultyModalOpen) {
       const diffs = ["ROOKIE", "AMATEUR", "PRO", "LEGEND"];
-      const startY = 70;
+      const startY = 66;
       diffs.forEach((dId, i) => {
         const by = startY + i * 36;
         if (e.x >= 136 && e.x <= 376 && e.y >= by && e.y <= by + 28) {
@@ -296,7 +329,7 @@ export const titleScene = {
         }
       });
 
-      if (e.x >= 206 && e.x <= 306 && e.y >= 214 && e.y <= 234) {
+      if (e.x >= 206 && e.x <= 306 && e.y >= 216 && e.y <= 238) {
         audio.playSfx("uiMove");
         this.difficultyModalOpen = false;
       }
@@ -305,8 +338,8 @@ export const titleScene = {
 
     // Main Menu Click Handling
     const logoX = 256;
-    const startY = 86;
-    const btnW = 200;
+    const startY = 88;
+    const btnW = 216;
     const btnH = 22;
     const gap = 6;
 

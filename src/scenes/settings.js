@@ -29,7 +29,12 @@ export const settingsScene = {
   update(dt) {},
 
   render(ctx) {
-    ctx.fillStyle = PAL.BLACK;
+    const bgGrad = ctx.createRadialGradient(256, 144, 40, 256, 144, 280);
+    bgGrad.addColorStop(0, "#161130");
+    bgGrad.addColorStop(0.6, "#0e0a21");
+    bgGrad.addColorStop(1, "#07050e");
+
+    ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
 
     // Top Header

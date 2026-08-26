@@ -20,7 +20,7 @@ export function pxToPhys(x, y) {
   };
 }
 
-// Render complete static table
+// Render complete 32-bit luxury pool table
 export function renderTable(ctx) {
   const px = CFG.PLAYFIELD_PX.x;
   const py = CFG.PLAYFIELD_PX.y;
@@ -33,26 +33,30 @@ export function renderTable(ctx) {
   const tableWidth = pw + rw * 2;
   const tableHeight = ph + rw * 2;
 
-  // 1. Table Rails outer body
-  ctx.fillStyle = PAL.RAIL;
+  // 1. Table Outer Drop Shadow
+  ctx.fillStyle = "rgba(4, 3, 8, 0.65)";
+  ctx.fillRect(tableLeft + 4, tableTop + 4, tableWidth, tableHeight);
+
+  // 2. Rich Mahogany Wood Rails (Gradient bevel)
+  const woodGrad = ctx.createLinearGradient(tableLeft, tableTop, tableLeft, tableTop + tableHeight);
+  woodGrad.addColorStop(0, PAL.RAIL_LIGHT);
+  woodGrad.addColorStop(0.5, PAL.RAIL);
+  woodGrad.addColorStop(1, PAL.RAIL_DARK);
+
+  ctx.fillStyle = woodGrad;
   ctx.fillRect(tableLeft, tableTop, tableWidth, tableHeight);
 
-  // Outer 2px RAIL_DARK border
-  ctx.strokeStyle = PAL.RAIL_DARK;
-  ctx.lineWidth = 2;
+  // Polished Rosewood outer bevel lip
+  ctx.strokeStyle = PAL.RAIL_HI;
+  ctx.lineWidth = 1.5;
   ctx.strokeRect(tableLeft + 1, tableTop + 1, tableWidth - 2, tableHeight - 2);
 
-  // Next 3px RAIL_LIGHT band
-  ctx.strokeStyle = PAL.RAIL_LIGHT;
-  ctx.lineWidth = 1;
+  // Inner Cushion Shadow Band
+  ctx.strokeStyle = PAL.RAIL_DARKEST;
+  ctx.lineWidth = 2;
   ctx.strokeRect(tableLeft + 3, tableTop + 3, tableWidth - 6, tableHeight - 6);
 
-  // Inner 1px RAIL_HI highlight lip
-  ctx.strokeStyle = PAL.RAIL_HI;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(px - 1, py - 1, pw + 2, ph + 2);
-
-  // 2. Playfield Felt
+  // 3. Playfield Felt (with overhead pool lamp radial lighting)
   if (SPRITES.felt) {
     ctx.drawImage(SPRITES.felt, px, py);
   } else {
@@ -60,15 +64,25 @@ export function renderTable(ctx) {
     ctx.fillRect(px, py, pw, ph);
   }
 
-  ctx.strokeStyle = PAL.FELT_DARK;
-  ctx.lineWidth = 1;
+  // Overhead Warm Spotlight Vignette on Felt
+  const spotGrad = ctx.createRadialGradient(px + pw / 2, py + ph / 2, 20, px + pw / 2, py + ph / 2, pw * 0.65);
+  spotGrad.addColorStop(0, "rgba(255, 255, 200, 0.08)");
+  spotGrad.addColorStop(0.6, "rgba(0, 0, 0, 0.0)");
+  spotGrad.addColorStop(1, "rgba(4, 18, 10, 0.35)");
+
+  ctx.fillStyle = spotGrad;
+  ctx.fillRect(px, py, pw, ph);
+
+  // Inner Rail Cushion Ambient Occlusion Lip
+  ctx.strokeStyle = "rgba(4, 20, 10, 0.5)";
+  ctx.lineWidth = 1.5;
   ctx.strokeRect(px, py, pw, ph);
 
-  // 3. Head string & Spots
+  // 4. Head string & Gold Spots
   const headStrPx = physToPx(CFG.HEAD_STRING_X, 0).x;
   ctx.save();
   ctx.setLineDash([2, 4]);
-  ctx.strokeStyle = PAL.FELT_LIGHT;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
   ctx.beginPath();
   ctx.moveTo(Math.round(headStrPx), py);
   ctx.lineTo(Math.round(headStrPx), py + ph);
@@ -78,15 +92,18 @@ export function renderTable(ctx) {
   const headSpotPx = physToPx(CFG.HEAD_SPOT.x, CFG.HEAD_SPOT.y);
   const footSpotPx = physToPx(CFG.FOOT_SPOT.x, CFG.FOOT_SPOT.y);
 
-  ctx.fillStyle = PAL.BRASS;
+  // Inlaid brass spots
+  ctx.fillStyle = PAL.GOLD;
   ctx.fillRect(Math.round(headSpotPx.x - 1), Math.round(headSpotPx.y - 1), 3, 3);
   ctx.fillRect(Math.round(footSpotPx.x - 1), Math.round(footSpotPx.y - 1), 3, 3);
 
-  // 4. Rail Diamonds
+  // 5. Polished Mother-of-Pearl / Gold Diamond Sights
   const drawDiamond = (dx, dy) => {
-    ctx.fillStyle = PAL.BRASS;
+    ctx.fillStyle = PAL.GOLD_LIGHT;
     ctx.fillRect(Math.round(dx), Math.round(dy - 1), 1, 3);
     ctx.fillRect(Math.round(dx - 1), Math.round(dy), 3, 1);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(Math.round(dx), Math.round(dy), 1, 1);
   };
 
   const diamondXs = [px + 100, px + 200, px + 300];
@@ -99,36 +116,44 @@ export function renderTable(ctx) {
   drawDiamond(px - 7, diamondY);
   drawDiamond(px + pw + 7, diamondY);
 
-  // 5. Pockets
+  // 6. Leather Pocket Drop Wells & Brass Corner Castings
   POCKETS.forEach((p) => {
     const pos = physToPx(p.x, p.y);
     const radius = p.r * CFG.PHYS_TO_PX;
 
-    ctx.fillStyle = PAL.POCKET;
+    // Brass corner lip
+    ctx.strokeStyle = PAL.GOLD_DARK;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(Math.round(pos.x), Math.round(pos.y), radius + 1.5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Deep leather pocket hole
+    const pocketGrad = ctx.createRadialGradient(pos.x, pos.y, 1, pos.x, pos.y, radius);
+    pocketGrad.addColorStop(0, "#000000");
+    pocketGrad.addColorStop(0.7, PAL.POCKET);
+    pocketGrad.addColorStop(1, PAL.POCKET_RIM);
+
+    ctx.fillStyle = pocketGrad;
     ctx.beginPath();
     ctx.arc(Math.round(pos.x), Math.round(pos.y), radius, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = PAL.RAIL_DARK;
+    // Subtle leather rim shadow
+    ctx.strokeStyle = "rgba(0,0,0,0.8)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(Math.round(pos.x), Math.round(pos.y), radius, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.strokeStyle = PAL.BLACK;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(Math.round(pos.x), Math.round(pos.y), radius - 1, Math.PI * 0.75, Math.PI * 1.75);
+    ctx.arc(Math.round(pos.x), Math.round(pos.y), radius - 0.5, 0, Math.PI * 2);
     ctx.stroke();
   });
 }
 
-// Render all balls
+// Render all 32-bit billiard balls (with soft drop shadows & pulsing legal halos)
 export function renderBalls(ctx, balls, matchState = null) {
   const time = performance.now() / 1000;
   const pulse = 0.5 + 0.5 * Math.sin(time * 6);
 
-  // 1. Legal target ball halos
+  // 1. Legal target ball halos (glowing cyan / brass rings)
   if (matchState && matchState.turn === "PLAYER" && (matchState.phase === "AIMING" || matchState.phase === "CALL_POCKET")) {
     balls.forEach((ball) => {
       if (!ball.inPlay || ball.id === 0) return;
@@ -136,72 +161,69 @@ export function renderBalls(ctx, balls, matchState = null) {
       if (isLegal) {
         const pos = physToPx(ball.x, ball.y);
         ctx.save();
-        ctx.strokeStyle = ball.id === 8 ? PAL.BRASS : PAL.CYAN;
+        ctx.strokeStyle = ball.id === 8 ? PAL.GOLD : PAL.CYAN;
         ctx.lineWidth = 1.5;
         ctx.globalAlpha = 0.4 + 0.5 * pulse;
         ctx.beginPath();
-        ctx.arc(Math.round(pos.x), Math.round(pos.y), 7, 0, Math.PI * 2);
+        ctx.arc(Math.round(pos.x), Math.round(pos.y), 7.5, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       }
     });
   }
 
-  // 2. Ball shadows
+  // 2. Soft radial ball drop shadows
   if (SPRITES.ballShadow) {
     balls.forEach((ball) => {
       if (!ball.inPlay) return;
       const pos = physToPx(ball.x, ball.y);
       ctx.drawImage(
         SPRITES.ballShadow,
-        Math.round(pos.x - 4 + 1),
-        Math.round(pos.y - 2 + 2)
+        Math.round(pos.x - 7 + 1.5),
+        Math.round(pos.y - 4 + 2.5)
       );
     });
   }
 
-  // 3. Balls
+  // 3. 32-bit 3D spheres
   balls.forEach((ball) => {
     if (!ball.inPlay) return;
     const pos = physToPx(ball.x, ball.y);
-    const frame = Math.floor((ball.distanceTravelled || 0) / 6) % 4;
+    const frame = Math.floor((ball.distanceTravelled || 0) / 5) % 4;
     const sprite = SPRITES.balls[ball.id] ? SPRITES.balls[ball.id][frame] : null;
 
     if (sprite) {
+      // 12x12 sprite centered at pos.x, pos.y
       ctx.drawImage(
         sprite,
-        Math.round(pos.x - 4.5),
-        Math.round(pos.y - 4.5)
+        Math.round(pos.x - 6),
+        Math.round(pos.y - 6)
       );
     }
   });
 }
 
-// Render Cue Stick (Tip is nearest cue ball at x=pullback, butt points away)
+// Render Cue Stick
 export function renderCueStick(ctx, cueBall, aimAngle, power = 0, cueSkin = "DEFAULT") {
   if (!cueBall || !cueBall.inPlay || !SPRITES.cue) return;
 
   const pos = physToPx(cueBall.x, cueBall.y);
-  // Ball radius is 4.5px on screen.
-  // Tip starts 7px from center (2.5px gap from ball rim) when power = 0.
-  // Pulls back up to 34px away from cue ball at 100% power.
-  const pullback = 7 + power * 27;
+  const pullback = 7.5 + power * 28;
 
   ctx.save();
   ctx.translate(Math.round(pos.x), Math.round(pos.y));
-  ctx.rotate(aimAngle + Math.PI); // Angle pointing away behind cue ball
+  ctx.rotate(aimAngle + Math.PI);
 
-  // Draw sprite (Tip is at x=0, butt is at x=55)
   ctx.drawImage(
     SPRITES.cue,
     Math.round(pullback),
-    -2
+    -3
   );
 
   ctx.restore();
 }
 
-// Render Aim Assist with Legal Target vs Foul Indicators
+// Render Aim Assist with Laser Line and Deflection Physics
 export function renderAimAssist(ctx, state, aimAngle, assistLevel = "FULL") {
   const cue = state.balls[0];
   if (!cue || !cue.inPlay) return;
@@ -263,11 +285,11 @@ export function renderAimAssist(ctx, state, aimAngle, assistLevel = "FULL") {
     const isLegalTarget = isBallLegalFirstContact(nearestHit.target.id, state, state.turn);
     const ghostPx = physToPx(nearestHit.ghostPos.x, nearestHit.ghostPos.y);
 
-    // Aim Line
+    // Aim Laser Line (Dashed White or Neon Red)
     ctx.save();
     ctx.setLineDash([3, 3]);
-    ctx.strokeStyle = isLegalTarget ? PAL.WHITE : PAL.RED;
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = isLegalTarget ? "rgba(255, 255, 255, 0.85)" : PAL.RED;
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
     ctx.moveTo(Math.round(cuePx.x), Math.round(cuePx.y));
     ctx.lineTo(Math.round(ghostPx.x), Math.round(ghostPx.y));
@@ -302,11 +324,11 @@ export function renderAimAssist(ctx, state, aimAngle, assistLevel = "FULL") {
 
     if (assistLevel !== "CUE_ONLY") {
       const targetNormal = norm(sub(nearestHit.target, nearestHit.ghostPos));
-      const targetLen = assistLevel === "HALF" ? 13 : 26;
+      const targetLen = assistLevel === "HALF" ? 14 : 28;
       const targetEndPx = add(ghostPx, mul(targetNormal, targetLen));
 
       ctx.strokeStyle = isLegalTarget ? PAL.CYAN : PAL.RED;
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.moveTo(Math.round(ghostPx.x), Math.round(ghostPx.y));
       ctx.lineTo(Math.round(targetEndPx.x), Math.round(targetEndPx.y));
@@ -319,7 +341,7 @@ export function renderAimAssist(ctx, state, aimAngle, assistLevel = "FULL") {
       const cueEndPx = add(ghostPx, mul(cueDir, cueLen));
 
       ctx.strokeStyle = PAL.MAGENTA;
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.moveTo(Math.round(ghostPx.x), Math.round(ghostPx.y));
       ctx.lineTo(Math.round(cueEndPx.x), Math.round(cueEndPx.y));
@@ -331,8 +353,8 @@ export function renderAimAssist(ctx, state, aimAngle, assistLevel = "FULL") {
 
     ctx.save();
     ctx.setLineDash([3, 3]);
-    ctx.strokeStyle = PAL.WHITE;
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
     ctx.moveTo(Math.round(cuePx.x), Math.round(cuePx.y));
     ctx.lineTo(Math.round(hitPx.x), Math.round(hitPx.y));
@@ -341,7 +363,7 @@ export function renderAimAssist(ctx, state, aimAngle, assistLevel = "FULL") {
     if (hitCushionNormal) {
       const dotVal = dot(dir, hitCushionNormal);
       const reflectDir = sub(dir, mul(hitCushionNormal, 2 * dotVal));
-      const bounceEndPx = add(hitPx, mul(reflectDir, 30));
+      const bounceEndPx = add(hitPx, mul(reflectDir, 32));
 
       ctx.beginPath();
       ctx.moveTo(Math.round(hitPx.x), Math.round(hitPx.y));
@@ -357,20 +379,14 @@ export function renderCRTEffect(ctx) {
   const w = CFG.BASE_W;
   const h = CFG.BASE_H;
 
-  ctx.fillStyle = "rgba(0, 0, 0, 0.10)";
+  ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
   for (let y = 1; y < h; y += 2) {
     ctx.fillRect(0, y, w, 1);
   }
 
-  ctx.fillStyle = "rgba(5, 4, 9, 0.18)";
+  ctx.fillStyle = "rgba(7, 5, 14, 0.15)";
   ctx.fillRect(0, 0, w, 2);
   ctx.fillRect(0, h - 2, w, 2);
   ctx.fillRect(0, 0, 2, h);
   ctx.fillRect(w - 2, 0, 2, h);
-
-  ctx.fillStyle = "rgba(5, 4, 9, 0.08)";
-  ctx.fillRect(0, 2, w, 3);
-  ctx.fillRect(0, h - 5, w, 3);
-  ctx.fillRect(2, 0, 3, h);
-  ctx.fillRect(w - 5, 0, 3, h);
 }
