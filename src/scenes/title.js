@@ -102,7 +102,7 @@ export const titleScene = {
     // Subtitle
     ctx.fillStyle = PAL.CYAN;
     ctx.font = '8px "Press Start 2P", monospace';
-    ctx.fillText("RETRO 8-BALL RETROFIT", logoX, logoY + 20);
+    ctx.fillText("CLASSIC 8-BALL BILLIARDS", logoX, logoY + 20);
 
     // 3. Menu Items
     const startY = 86;
