@@ -45,23 +45,6 @@ export const CUPS = {
   },
 };
 
-export const COSMETIC_CUES = [
-  { id: "DEFAULT",  name: "CLASSIC",   cost: 0 },
-  { id: "MIDNIGHT", name: "MIDNIGHT",  cost: 300 },
-  { id: "GOLDEN",   name: "GOLDEN",    cost: 800 },
-  { id: "EMERALD",  name: "EMERALD",   cost: 1200 },
-  { id: "CYBER",    name: "CYBER",     cost: 2000 },
-  { id: "DRAGON",   name: "DRAGON",    cost: 3500 },
-];
-
-export const COSMETIC_FELTS = [
-  { id: "DEFAULT",  name: "CLASSIC GREEN", cost: 0,    felt: PAL.FELT, light: PAL.FELT_LIGHT, dark: PAL.FELT_DARK },
-  { id: "BLUE",     name: "OCEAN BLUE",   cost: 400,  felt: PAL.BLUE, light: PAL.CYAN,       dark: PAL.BLUE_DARK },
-  { id: "RED",      name: "RUBY RED",     cost: 750,  felt: PAL.RED,  light: PAL.ORANGE,     dark: PAL.RED_DARK },
-  { id: "PURPLE",   name: "ROYAL PURPLE", cost: 1500, felt: PAL.PURPLE, light: PAL.MAGENTA, dark: PAL.DARK },
-  { id: "MIDNIGHT", name: "OBSIDIAN",     cost: 2500, felt: PAL.DARK, light: PAL.SLATE,     dark: PAL.DARKEST },
-];
-
 // Helper to get strength rating for instant AI vs AI matches
 const TIER_WEIGHT = {
   ROOKIE: 1,

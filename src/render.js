@@ -174,15 +174,30 @@ export function renderTable(ctx) {
     ctx.fillRect(Math.round(dx), Math.round(dy), 1, 1);
   };
 
-  const diamondXs = [px + 100, px + 200, px + 300];
-  diamondXs.forEach((dx) => {
+  // Top and bottom rails: 3 diamonds per half-rail
+  const topBottomXs = [
+    px + pw * 0.125,
+    px + pw * 0.25,
+    px + pw * 0.375,
+    px + pw * 0.625,
+    px + pw * 0.75,
+    px + pw * 0.875,
+  ];
+  topBottomXs.forEach((dx) => {
     drawDiamond(dx, py - 7);
     drawDiamond(dx, py + ph + 7);
   });
 
-  const diamondY = py + 100;
-  drawDiamond(px - 7, diamondY);
-  drawDiamond(px + pw + 7, diamondY);
+  // Left and right side rails: 3 diamonds each
+  const sideYs = [
+    py + ph * 0.25,
+    py + ph * 0.50,
+    py + ph * 0.75,
+  ];
+  sideYs.forEach((dy) => {
+    drawDiamond(px - 7, dy);
+    drawDiamond(px + pw + 7, dy);
+  });
 
   // 6. Leather Pocket Drop Wells & Brass Corner Castings
   POCKETS.forEach((p) => {

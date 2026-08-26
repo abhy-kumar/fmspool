@@ -462,11 +462,9 @@ export const matchScene = {
     // 4. Render HUD Strip
     this.renderHUD(ctx);
 
-    // 5. Render Input Controls Overlay
+    // 5. Render Input Controls Overlay (Player Only)
     if (this.state.turn === "PLAYER") {
       this.input.renderControls(ctx, this.state);
-    } else {
-      this.input.renderPauseButton(ctx);
     }
 
     // 6. Achievement Unlock Toast Notification Banner
@@ -489,7 +487,9 @@ export const matchScene = {
       this.renderPauseModal(ctx);
     }
 
-    renderCRTEffect(ctx);
+    if (settings.crtEnabled) {
+      renderCRTEffect(ctx);
+    }
   },
 
   renderAchievementToast(ctx) {
@@ -527,6 +527,7 @@ export const matchScene = {
   },
 
   renderHUD(ctx) {
+    ctx.save();
     const save = loadSave();
 
     // HUD Background (Top 46 px)
@@ -548,66 +549,143 @@ export const matchScene = {
 
     const pGroup = this.state.groups.PLAYER;
     if (pGroup) {
-      const gBallId = pGroup === "SOLIDS" ? 1 : 9;
-      if (SPRITES.balls[gBallId]) ctx.drawImage(SPRITES.balls[gBallId][0], 38, 18);
       ctx.fillStyle = PAL.SILVER;
-      ctx.fillText(`${pGroup}`, 52, 19);
+      ctx.font = '7px "Press Start 2P", monospace';
+      ctx.fillText(`${pGroup}`, 38, 18);
 
       const startBall = pGroup === "SOLIDS" ? 1 : 9;
       const endBall = pGroup === "SOLIDS" ? 7 : 15;
       let dotX = 38;
+      let ownPottedCount = 0;
+
       for (let bId = startBall; bId <= endBall; bId++) {
         const bObj = this.state.balls[bId];
         const isPotted = !bObj || !bObj.inPlay;
-        ctx.fillStyle = isPotted ? PAL.DARK : (pGroup === "SOLIDS" ? PAL.YELLOW : PAL.BLUE);
-        ctx.fillRect(dotX, 32, 6, 6);
-        ctx.strokeStyle = PAL.SLATE;
-        ctx.strokeRect(dotX, 32, 6, 6);
-        dotX += 9;
+        if (isPotted) ownPottedCount++;
+
+        const sprite = SPRITES.balls[bId] ? SPRITES.balls[bId][0] : null;
+        if (sprite) {
+          if (isPotted) {
+            ctx.save();
+            ctx.globalAlpha = 0.22;
+            ctx.drawImage(sprite, dotX, 29);
+            ctx.restore();
+            ctx.strokeStyle = "rgba(255,255,255,0.15)";
+            ctx.strokeRect(dotX - 1, 28, 14, 14);
+          } else {
+            ctx.drawImage(sprite, dotX, 29);
+          }
+        }
+        dotX += 14;
       }
+
+      // 8-Ball Slot
       const eightObj = this.state.balls[8];
       const eightPotted = !eightObj || !eightObj.inPlay;
-      ctx.fillStyle = eightPotted ? PAL.DARK : PAL.DARKEST;
-      ctx.fillRect(dotX + 3, 32, 6, 6);
-      ctx.strokeStyle = PAL.BRASS;
-      ctx.strokeRect(dotX + 3, 32, 6, 6);
+      const eightSprite = SPRITES.balls[8] ? SPRITES.balls[8][0] : null;
+      if (eightSprite) {
+        if (eightPotted) {
+          ctx.save();
+          ctx.globalAlpha = 0.22;
+          ctx.drawImage(eightSprite, dotX + 3, 29);
+          ctx.restore();
+        } else {
+          ctx.drawImage(eightSprite, dotX + 3, 29);
+          // If all 7 balls are potted, highlight the 8-ball as ready to win!
+          if (ownPottedCount === 7 && this.state.turn === "PLAYER") {
+            const time = performance.now() / 1000;
+            const pulse = 0.5 + 0.5 * Math.sin(time * 8);
+            ctx.save();
+            ctx.strokeStyle = PAL.GOLD;
+            ctx.lineWidth = 1.5;
+            ctx.globalAlpha = 0.5 + 0.5 * pulse;
+            ctx.strokeRect(dotX + 2, 28, 14, 14);
+            ctx.restore();
+          }
+        }
+      }
     } else {
       ctx.fillStyle = PAL.GREEN;
-      ctx.fillText("OPEN TABLE", 38, 20);
+      ctx.font = '7px "Press Start 2P", monospace';
+      ctx.fillText("OPEN TABLE", 38, 18);
       ctx.fillStyle = PAL.SILVER;
-      ctx.fillText("ANY BALL (EXCEPT 8)", 38, 32);
+      ctx.font = '6px "Press Start 2P", monospace';
+      ctx.fillText("POCKET ANY BALL TO CLAIM GROUP", 38, 31);
     }
 
     // AI Block (Right)
     const portrait = SPRITES.portraits[this.opponentName] || SPRITES.portraits["CHALK"];
     if (portrait) {
-      ctx.drawImage(portrait, CFG.BASE_W - 22, 6);
+      ctx.drawImage(portrait, CFG.BASE_W - 24, 5);
     }
 
     ctx.fillStyle = this.state.turn === "AI" ? PAL.CYAN : PAL.WHITE;
+    ctx.font = '8px "Press Start 2P", monospace';
     ctx.textAlign = "right";
-    ctx.fillText(this.opponentName, CFG.BASE_W - 26, 6);
+    ctx.textBaseline = "top";
+    ctx.fillText(this.opponentName, CFG.BASE_W - 28, 6);
 
     const aiGroup = this.state.groups.AI;
     if (aiGroup) {
       ctx.fillStyle = PAL.SILVER;
-      ctx.fillText(`${aiGroup}`, CFG.BASE_W - 26, 19);
+      ctx.font = '7px "Press Start 2P", monospace';
+      ctx.fillText(`${aiGroup}`, CFG.BASE_W - 28, 18);
 
       const startBall = aiGroup === "SOLIDS" ? 1 : 9;
       const endBall = aiGroup === "SOLIDS" ? 7 : 15;
-      let dotX = CFG.BASE_W - 26;
+      let dotX = CFG.BASE_W - 28;
+      let aiPottedCount = 0;
+
+      // 8-Ball Slot for AI
+      const eightObj = this.state.balls[8];
+      const eightPotted = !eightObj || !eightObj.inPlay;
+      const eightSprite = SPRITES.balls[8] ? SPRITES.balls[8][0] : null;
+
       for (let bId = endBall; bId >= startBall; bId--) {
         const bObj = this.state.balls[bId];
         const isPotted = !bObj || !bObj.inPlay;
-        ctx.fillStyle = isPotted ? PAL.DARK : (aiGroup === "SOLIDS" ? PAL.YELLOW : PAL.BLUE);
-        ctx.fillRect(dotX - 6, 32, 6, 6);
-        ctx.strokeStyle = PAL.SLATE;
-        ctx.strokeRect(dotX - 6, 32, 6, 6);
-        dotX -= 9;
+        if (isPotted) aiPottedCount++;
+
+        const sprite = SPRITES.balls[bId] ? SPRITES.balls[bId][0] : null;
+        if (sprite) {
+          if (isPotted) {
+            ctx.save();
+            ctx.globalAlpha = 0.22;
+            ctx.drawImage(sprite, dotX - 12, 29);
+            ctx.restore();
+            ctx.strokeStyle = "rgba(255,255,255,0.15)";
+            ctx.strokeRect(dotX - 13, 28, 14, 14);
+          } else {
+            ctx.drawImage(sprite, dotX - 12, 29);
+          }
+        }
+        dotX -= 14;
+      }
+
+      if (eightSprite) {
+        if (eightPotted) {
+          ctx.save();
+          ctx.globalAlpha = 0.22;
+          ctx.drawImage(eightSprite, dotX - 15, 29);
+          ctx.restore();
+        } else {
+          ctx.drawImage(eightSprite, dotX - 15, 29);
+          if (aiPottedCount === 7 && this.state.turn === "AI") {
+            const time = performance.now() / 1000;
+            const pulse = 0.5 + 0.5 * Math.sin(time * 8);
+            ctx.save();
+            ctx.strokeStyle = PAL.GOLD;
+            ctx.lineWidth = 1.5;
+            ctx.globalAlpha = 0.5 + 0.5 * pulse;
+            ctx.strokeRect(dotX - 16, 28, 14, 14);
+            ctx.restore();
+          }
+        }
       }
     } else {
       ctx.fillStyle = PAL.GREY;
-      ctx.fillText("OPEN", CFG.BASE_W - 26, 20);
+      ctx.font = '7px "Press Start 2P", monospace';
+      ctx.fillText("OPEN", CFG.BASE_W - 28, 18);
     }
 
     // Center: Turn Banner & Game Messages
@@ -627,6 +705,8 @@ export const matchScene = {
       ctx.fillStyle = isPlayer ? PAL.CYAN : PAL.MAGENTA;
       ctx.fillText(isPlayer ? "YOUR TURN" : `${this.opponentName}'S TURN`, msgX, 14);
     }
+
+    ctx.restore();
   },
 
   renderResultsModal(ctx) {

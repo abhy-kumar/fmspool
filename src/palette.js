@@ -68,4 +68,12 @@ export const PAL = {
   YELLOW: "#ffd000",
   GREEN: "#00ff77",
   RED: "#ff2a4b",
+
+  // Shorthand Aliases (referenced by HUD, sprites, and tournament)
+  BLUE: "#0077ff",
+  BLUE_DARK: "#0047b3",
+  MAROON: "#9c1b3e",
+  ORANGE: "#ff7700",
+  RED_DARK: "#b30b24",
+  PURPLE: "#9b26b6",
 };

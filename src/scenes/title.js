@@ -204,7 +204,9 @@ export const titleScene = {
       this.renderHowToPlayModal(ctx);
     }
 
-    renderCRTEffect(ctx);
+    if (settings.crtEnabled) {
+      renderCRTEffect(ctx);
+    }
   },
 
   renderDifficultyModal(ctx) {

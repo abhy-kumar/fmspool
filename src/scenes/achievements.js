@@ -104,7 +104,7 @@ export const achievementsScene = {
       ctx.textBaseline = "top";
 
       // Truncate title if extremely long to guarantee no overlap with right badge
-      const displayTitle = ach.title.length > 18 ? ach.title.slice(0, 17) + "." : ach.title;
+      const displayTitle = ach.title.length > 20 ? ach.title.slice(0, 19) + ".." : ach.title;
       ctx.fillText(displayTitle, cx + 8, cy + 8);
 
       if (isUnlocked) {
@@ -150,7 +150,7 @@ export const achievementsScene = {
     });
 
     // Pagination Footer
-    renderButton(ctx, { x: 136, y: 254, w: 90, h: 22 }, "< PREV", false);
+    renderButton(ctx, { x: 120, y: 254, w: 90, h: 22 }, "< PREV", this.page > 0);
 
     ctx.fillStyle = PAL.WHITE;
     ctx.font = '8px "Press Start 2P", monospace';
@@ -158,7 +158,7 @@ export const achievementsScene = {
     ctx.textBaseline = "middle";
     ctx.fillText(`PAGE ${this.page + 1}/${maxPages}`, 256, 265);
 
-    renderButton(ctx, { x: 286, y: 254, w: 90, h: 22 }, "NEXT >", false);
+    renderButton(ctx, { x: 302, y: 254, w: 90, h: 22 }, "NEXT >", this.page < maxPages - 1);
 
     if (settings.crtEnabled) {
       renderCRTEffect(ctx);
@@ -175,19 +175,23 @@ export const achievementsScene = {
       return;
     }
 
-    const maxPages = Math.ceil(ACHIEVEMENTS.length / this.itemsPerPage);
+    const maxPages = Math.ceil(ACHIEVEMENTS.length / 4);
 
     // Prev Button
-    if (e.x >= 136 && e.x <= 226 && e.y >= 254 && e.y <= 276) {
-      this.page = (this.page - 1 + maxPages) % maxPages;
-      audio.playSfx("uiMove");
+    if (e.x >= 120 && e.x <= 210 && e.y >= 254 && e.y <= 276) {
+      if (this.page > 0) {
+        audio.playSfx("uiMove");
+        this.page--;
+      }
       return;
     }
 
     // Next Button
-    if (e.x >= 286 && e.x <= 376 && e.y >= 254 && e.y <= 276) {
-      this.page = (this.page + 1) % maxPages;
-      audio.playSfx("uiMove");
+    if (e.x >= 302 && e.x <= 392 && e.y >= 254 && e.y <= 276) {
+      if (this.page < maxPages - 1) {
+        audio.playSfx("uiMove");
+        this.page++;
+      }
       return;
     }
   },

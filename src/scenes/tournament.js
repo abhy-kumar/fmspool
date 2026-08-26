@@ -2,7 +2,7 @@ import { CFG } from "../config.js";
 import { PAL } from "../palette.js";
 import { SPRITES } from "../sprites.js";
 import { CUPS, createTournamentBracket, advanceTournamentRound } from "../tournament.js";
-import { loadSave, saveImmediate, unlockAchievement } from "../storage.js";
+import { loadSave, loadSettings, saveImmediate, unlockAchievement } from "../storage.js";
 import { computeRunScore } from "../scoring.js";
 import { renderPanel, renderButton } from "../ui.js";
 import { renderCRTEffect } from "../render.js";
@@ -50,7 +50,10 @@ export const tournamentScene = {
       this.renderVictory(ctx);
     }
 
-    renderCRTEffect(ctx);
+    const settings = loadSettings();
+    if (settings.crtEnabled) {
+      renderCRTEffect(ctx);
+    }
   },
 
   renderCupSelect(ctx) {
@@ -174,7 +177,7 @@ export const tournamentScene = {
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(qfStartX + boxW, my + boxH);
-      ctx.lineTo(qfStartX + boxW + 16, my + boxH);
+      ctx.lineTo(sfStartX, my + boxH);
       ctx.stroke();
     }
 
@@ -191,7 +194,7 @@ export const tournamentScene = {
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(sfStartX + boxW, my + boxH);
-      ctx.lineTo(sfStartX + boxW + 20, my + boxH);
+      ctx.lineTo(fStartX, my + boxH);
       ctx.stroke();
     }
 
@@ -205,6 +208,15 @@ export const tournamentScene = {
     // Champion Plate
     const champX = 390;
     const champY = fy + 10;
+
+    // Finals -> Champion connector
+    ctx.strokeStyle = fMatch.winner ? PAL.BRASS : PAL.SLATE;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(fStartX + boxW, fy + boxH);
+    ctx.lineTo(champX, fy + boxH);
+    ctx.stroke();
+
     renderPanel(ctx, champX, champY, 96, 32, "CHAMPION");
     if (this.bracket.champion) {
       ctx.fillStyle = PAL.BRASS;

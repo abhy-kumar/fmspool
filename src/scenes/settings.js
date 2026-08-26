@@ -299,8 +299,8 @@ export const settingsScene = {
     const s = this.settings;
     const save = loadSave();
 
-    // Volume Sliders (leftBtnX = 166, width = 26, + at x = 196)
-    if (e.y >= 56 && e.y <= 76) {
+    // Volume Sliders (leftBtnX = 166, width = 26, + at x = 196, h = 18)
+    if (e.y >= 57 && e.y <= 75) {
       if (e.x >= 166 && e.x <= 192) {
         s.masterVol = Math.max(0, parseFloat((s.masterVol - 0.1).toFixed(1)));
         audio.setMasterVolume(s.masterVol);
@@ -311,7 +311,7 @@ export const settingsScene = {
         audio.playSfx("uiMove");
       }
     }
-    if (e.y >= 84 && e.y <= 104) {
+    if (e.y >= 85 && e.y <= 103) {
       if (e.x >= 166 && e.x <= 192) {
         s.musicVol = Math.max(0, parseFloat((s.musicVol - 0.1).toFixed(1)));
         audio.setMusicVolume(s.musicVol);
@@ -322,7 +322,7 @@ export const settingsScene = {
         audio.playSfx("uiMove");
       }
     }
-    if (e.y >= 112 && e.y <= 132) {
+    if (e.y >= 113 && e.y <= 131) {
       if (e.x >= 166 && e.x <= 192) {
         s.sfxVol = Math.max(0, parseFloat((s.sfxVol - 0.1).toFixed(1)));
         audio.setSfxVolume(s.sfxVol);
@@ -360,7 +360,7 @@ export const settingsScene = {
 
     // Tab Switches (y = 68..86)
     const tabY = 68;
-    if (e.y >= tabY && e.y <= tabY + 20) {
+    if (e.y >= tabY && e.y <= tabY + 18) {
       if (e.x >= 274 && e.x <= 342) {
         this.cosmeticTab = "CUES";
         audio.playSfx("uiSelect");
@@ -369,7 +369,7 @@ export const settingsScene = {
         this.cosmeticTab = "FELTS";
         audio.playSfx("uiSelect");
         return;
-      } else if (e.x >= 418 && e.x <= 488) {
+      } else if (e.x >= 418 && e.x <= 486) {
         this.cosmeticTab = "BACKGROUNDS";
         audio.playSfx("uiSelect");
         return;

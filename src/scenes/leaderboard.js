@@ -2,7 +2,7 @@ import { CFG } from "../config.js";
 import { PAL } from "../palette.js";
 import { SPRITES } from "../sprites.js";
 import { fetchLeaderboard, getIsOffline } from "../cloud.js";
-import { loadSave } from "../storage.js";
+import { loadSave, loadSettings } from "../storage.js";
 import { formatWithDiscriminator } from "../identity.js";
 import { renderPanel, renderButton } from "../ui.js";
 import { renderCRTEffect } from "../render.js";
@@ -241,13 +241,41 @@ export const leaderboardScene = {
         ctx.fillStyle = isPlayer ? PAL.CYAN : PAL.BRASS;
         ctx.fillText(valStr, 480, ry + 6);
       }
+
+      // Pagination Controls
+      if (this.entries.length > visibleRows) {
+        const totalPages = Math.ceil(this.entries.length / visibleRows);
+        const curPage = Math.floor(this.scrollOffset / visibleRows) + 1;
+
+        renderButton(ctx, { x: 130, y: 242, w: 70, h: 22 }, "< PREV", this.scrollOffset > 0);
+        renderButton(ctx, { x: 312, y: 242, w: 70, h: 22 }, "NEXT >", this.scrollOffset + visibleRows < this.entries.length);
+
+        ctx.fillStyle = PAL.WHITE;
+        ctx.font = '8px "Press Start 2P", monospace';
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(`PAGE ${curPage}/${totalPages}`, 256, 253);
+      }
     }
 
-    renderCRTEffect(ctx);
+    const settings = loadSettings();
+    if (settings.crtEnabled) {
+      renderCRTEffect(ctx);
+    }
   },
 
   handlePointer(e) {
-    if (e.type !== "pointerdown") return;
+    if (e.type !== "pointerdown" && e.type !== "wheel") return;
+
+    if (e.type === "wheel") {
+      const visibleRows = 9;
+      if (e.deltaY > 0) {
+        this.scrollOffset = Math.min(Math.max(0, this.entries.length - visibleRows), this.scrollOffset + 1);
+      } else if (e.deltaY < 0) {
+        this.scrollOffset = Math.max(0, this.scrollOffset - 1);
+      }
+      return;
+    }
 
     // Back Button
     if (this.isInside(e.x, e.y, this.backBtn)) {
@@ -262,10 +290,27 @@ export const leaderboardScene = {
         if (this.selectedTab !== idx) {
           audio.playSfx("uiMove");
           this.selectedTab = idx;
+          this.scrollOffset = 0;
           this.refreshData();
         }
       }
     });
+
+    // Pagination Click Controls
+    const visibleRows = 9;
+    if (this.entries.length > visibleRows) {
+      if (e.x >= 130 && e.x <= 200 && e.y >= 242 && e.y <= 264) {
+        if (this.scrollOffset > 0) {
+          audio.playSfx("uiMove");
+          this.scrollOffset = Math.max(0, this.scrollOffset - visibleRows);
+        }
+      } else if (e.x >= 312 && e.x <= 382 && e.y >= 242 && e.y <= 264) {
+        if (this.scrollOffset + visibleRows < this.entries.length) {
+          audio.playSfx("uiMove");
+          this.scrollOffset = Math.min(this.entries.length - 1, this.scrollOffset + visibleRows);
+        }
+      }
+    }
   },
 
   onPointer(e) {
@@ -273,9 +318,24 @@ export const leaderboardScene = {
   },
 
   onKey(e) {
-    if (e.type === "keydown" && e.code === "Escape") {
-      audio.playSfx("uiSelect");
-      go("title");
+    if (e.type === "keydown") {
+      if (e.code === "Escape") {
+        audio.playSfx("uiSelect");
+        go("title");
+        return;
+      }
+      const visibleRows = 9;
+      if (e.code === "ArrowDown" || e.code === "PageDown") {
+        if (this.scrollOffset + visibleRows < this.entries.length) {
+          audio.playSfx("uiMove");
+          this.scrollOffset = Math.min(this.entries.length - 1, this.scrollOffset + visibleRows);
+        }
+      } else if (e.code === "ArrowUp" || e.code === "PageUp") {
+        if (this.scrollOffset > 0) {
+          audio.playSfx("uiMove");
+          this.scrollOffset = Math.max(0, this.scrollOffset - visibleRows);
+        }
+      }
     }
   },
 
