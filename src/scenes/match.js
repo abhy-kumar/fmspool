@@ -3,11 +3,11 @@ import { PAL } from "../palette.js";
 import { SPRITES, AI_PERSONALITIES } from "../sprites.js";
 import { createMatchState, createShotReport, processPhysicsEvents, evaluateShot, countRemaining, getBallGroup, isBallLegalFirstContact } from "../rules.js";
 import { step, allAtRest } from "../physics.js";
-import { renderTable, renderBalls, renderCueStick, renderAimAssist, renderCRTEffect, physToPx, pxToPhys } from "../render.js";
+import { renderTable, renderBalls, renderCueStick, renderAimAssist, renderCRTEffect, renderRoomBackground, physToPx, pxToPhys } from "../render.js";
 import { InputController } from "../input.js";
 import { chooseShot, chooseBallInHand } from "../ai.js";
 import { matchScore, getTier } from "../scoring.js";
-import { loadSave, saveMatchSnapshot, clearMatchSnapshot, saveImmediate, loadSettings } from "../storage.js";
+import { loadSave, saveMatchSnapshot, clearMatchSnapshot, saveImmediate, loadSettings, unlockAchievement } from "../storage.js";
 import { submitRun, checkQualifiesTop10 } from "../cloud.js";
 import { renderPanel, renderButton, ArcadeKeyboard } from "../ui.js";
 import { makeRng } from "../rng.js";
@@ -28,6 +28,7 @@ export const matchScene = {
   // Shot resolution
   shotReport: null,
   shotTimer: 0,
+  lastShotPower: 0.5,
 
   // AI Animation State
   aiThinkingTimer: 0,
@@ -35,7 +36,7 @@ export const matchScene = {
   aiPlannedShot: null,
   aiCueAngle: 0,
   aiCuePower: 0,
-  aiPhase: "IDLE", // 'IDLE' | 'THINKING' | 'ROTATING' | 'PULLBACK' | 'STRIKE'
+  aiPhase: "IDLE",
   aiAnimProgress: 0,
   aiPlanWaited: 0,
   aiPlanError: false,
@@ -46,6 +47,8 @@ export const matchScene = {
   resultsData: null,
   arcadeKeyboard: null,
   top10Rank: null,
+  achievementToast: null,
+  toastTimer: 0,
 
   enter(params = {}) {
     audio.playTrack("MATCH");
@@ -55,6 +58,8 @@ export const matchScene = {
     this.arcadeKeyboard = null;
     this.aiPhase = "IDLE";
     this.settings = loadSettings();
+    this.achievementToast = null;
+    this.toastTimer = 0;
 
     const save = loadSave();
 
@@ -79,6 +84,12 @@ export const matchScene = {
     audio.stopMusic();
   },
 
+  showAchievementToast(ach) {
+    this.achievementToast = ach;
+    this.toastTimer = 4.0;
+    audio.playSfx("newRecord");
+  },
+
   update(dt) {
     if (this.pauseOpen) return;
 
@@ -89,20 +100,26 @@ export const matchScene = {
 
     if (this.resultsOpen) return;
 
-    // 1. Message timer countdown
+    // Toast Timer
+    if (this.toastTimer > 0) {
+      this.toastTimer -= dt;
+      if (this.toastTimer <= 0) this.achievementToast = null;
+    }
+
+    // Message timer countdown
     if (this.state.messageTimer > 0) {
       this.state.messageTimer -= dt;
     }
 
-    // 2. Human Input Update
+    // Human Input Update
     this.input.update(dt, this.state);
 
-    // 3. AI Turn State Machine
+    // AI Turn State Machine
     if (this.state.turn === "AI") {
       this.updateAITurn(dt);
     }
 
-    // 4. Physics Shot Resolving
+    // Physics Shot Resolving
     if (this.state.phase === "SHOT_RESOLVING") {
       this.shotTimer += dt;
 
@@ -229,6 +246,7 @@ export const matchScene = {
     const cue = this.state.balls[0];
     if (!cue || !cue.inPlay) return;
 
+    this.lastShotPower = shot.power;
     audio.playSfx("cueStrike", { power: shot.power });
     audio.duckMusic(400);
 
@@ -244,10 +262,26 @@ export const matchScene = {
   },
 
   finishShot() {
+    const isPlayer = this.state.turn === "PLAYER";
     const result = evaluateShot(this.state, this.shotReport);
 
     if (result.foul) {
       audio.playSfx("foul");
+    } else if (isPlayer) {
+      // In-Match Achievement Triggers
+      if (this.shotReport.breakPots >= 2) {
+        const ach = unlockAchievement("SHOLAY_BREAK");
+        if (ach) this.showAchievementToast(ach);
+      }
+      if (this.state.stats.PLAYER.currentRun >= 4) {
+        const ach = unlockAchievement("WASSEYPUR_RUN");
+        if (ach) this.showAchievementToast(ach);
+      }
+      const eightPotted = this.shotReport.pocketed.some((p) => p.ball.id === 8);
+      if (eightPotted && this.lastShotPower >= 0.92) {
+        const ach = unlockAchievement("DHONI_FINISH");
+        if (ach) this.showAchievementToast(ach);
+      }
     }
 
     if (this.state.phase === "GAME_OVER") {
@@ -260,8 +294,20 @@ export const matchScene = {
   async handleGameOver() {
     clearMatchSnapshot();
     const won = this.state.winner === "PLAYER";
-    if (won) audio.playTrack("VICTORY");
-    else audio.playTrack("DEFEAT");
+    if (won) {
+      audio.playTrack("VICTORY");
+      // Victory Achievements
+      if (this.difficultyId === "PRO" || this.difficultyId === "LEGEND") {
+        const ach = unlockAchievement("DON_INTEZAAR");
+        if (ach) this.showAchievementToast(ach);
+      }
+      if (this.state.stats.PLAYER.fouls === 0) {
+        const ach = unlockAchievement("MR_INDIA");
+        if (ach) this.showAchievementToast(ach);
+      }
+    } else {
+      audio.playTrack("DEFEAT");
+    }
 
     const yourBallsLeft = countRemaining(this.state.balls, this.state.groups.PLAYER);
     const oppBallsLeft = countRemaining(this.state.balls, this.state.groups.AI);
@@ -274,6 +320,11 @@ export const matchScene = {
       this.difficultyId,
       this.modeKey
     );
+
+    if (won && res.components.P >= 0.85) {
+      const ach = unlockAchievement("JOHN_WICK");
+      if (ach) this.showAchievementToast(ach);
+    }
 
     this.resultsData = {
       score: res.score,
@@ -335,8 +386,8 @@ export const matchScene = {
   },
 
   render(ctx) {
-    ctx.fillStyle = PAL.BLACK;
-    ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
+    const settings = this.settings || loadSettings();
+    renderRoomBackground(ctx, settings.selectedBg || "DEFAULT");
 
     // 1. Render Pool Table & Pockets
     renderTable(ctx);
@@ -345,7 +396,6 @@ export const matchScene = {
     renderBalls(ctx, this.state.balls, this.state);
 
     // 3. Render Aim Assist & Cue Stick
-    const settings = this.settings || loadSettings();
     if (this.state.phase === "AIMING" && this.state.balls[0] && this.state.balls[0].inPlay) {
       if (this.state.turn === "PLAYER") {
         renderAimAssist(ctx, this.state, this.input.aimAngle, settings.assistLevel);
@@ -365,22 +415,51 @@ export const matchScene = {
       this.input.renderPauseButton(ctx);
     }
 
-    // 6. Results Modal Overlay
+    // 6. Achievement Unlock Toast Notification Banner
+    if (this.achievementToast && this.toastTimer > 0) {
+      this.renderAchievementToast(ctx);
+    }
+
+    // 7. Results Modal Overlay
     if (this.resultsOpen && this.resultsData) {
       this.renderResultsModal(ctx);
     }
 
-    // 7. Arcade Keyboard
+    // 8. Arcade Keyboard
     if (this.arcadeKeyboard) {
       this.arcadeKeyboard.render(ctx, this.resultsData ? this.resultsData.score : null, this.top10Rank);
     }
 
-    // 8. Pause Menu Overlay
+    // 9. Pause Menu Overlay
     if (this.pauseOpen) {
       this.renderPauseModal(ctx);
     }
 
     renderCRTEffect(ctx);
+  },
+
+  renderAchievementToast(ctx) {
+    const ach = this.achievementToast;
+    const toastW = 320;
+    const toastH = 34;
+    const tx = Math.round(CFG.BASE_W / 2 - toastW / 2);
+    const ty = 50;
+
+    // Toast Container
+    ctx.fillStyle = PAL.DARKEST;
+    ctx.fillRect(tx, ty, toastW, toastH);
+    ctx.strokeStyle = PAL.GOLD;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(tx, ty, toastW, toastH);
+
+    ctx.fillStyle = PAL.YELLOW;
+    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText(`ACHIEVEMENT: ${ach.title} (+${ach.coins} C)`, tx + toastW / 2, ty + 6);
+
+    ctx.fillStyle = PAL.CYAN;
+    ctx.fillText(`"${ach.quote}"`, tx + toastW / 2, ty + 20);
   },
 
   renderHUD(ctx) {
@@ -393,10 +472,10 @@ export const matchScene = {
     ctx.lineWidth = 1;
     ctx.strokeRect(0, 0, CFG.BASE_W, 46);
 
-    // 1. Menu / Pause Button on Far Left of Top HUD (Zero overlap with text or table!)
+    // Menu / Pause Button on Far Left
     this.input.renderPauseButton(ctx);
 
-    // 2. Player Block (Left, cleanly offset to x=38 so no overlap with Pause button)
+    // Player Block (Left)
     ctx.fillStyle = this.state.turn === "PLAYER" ? PAL.CYAN : PAL.WHITE;
     ctx.font = '8px "Press Start 2P", monospace';
     ctx.textAlign = "left";
@@ -410,7 +489,6 @@ export const matchScene = {
       ctx.fillStyle = PAL.SILVER;
       ctx.fillText(`${pGroup}`, 52, 19);
 
-      // Remaining balls dots
       const startBall = pGroup === "SOLIDS" ? 1 : 9;
       const endBall = pGroup === "SOLIDS" ? 7 : 15;
       let dotX = 38;
@@ -436,7 +514,7 @@ export const matchScene = {
       ctx.fillText("ANY BALL (EXCEPT 8)", 38, 32);
     }
 
-    // 3. AI Block (Right)
+    // AI Block (Right)
     const aiDef = AI_PERSONALITIES.find((a) => a.tier === this.difficultyId) || AI_PERSONALITIES[0];
     const portrait = SPRITES.portraits[aiDef.name];
     if (portrait) {
@@ -469,7 +547,7 @@ export const matchScene = {
       ctx.fillText("OPEN", CFG.BASE_W - 26, 20);
     }
 
-    // 4. Center: Turn Banner & Game Messages
+    // Center: Turn Banner & Game Messages
     const msgX = Math.round(CFG.BASE_W / 2);
     ctx.textAlign = "center";
     ctx.textBaseline = "top";

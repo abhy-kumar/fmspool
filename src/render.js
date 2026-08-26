@@ -5,6 +5,8 @@ import { POCKETS } from "./table.js";
 import { isBallLegalFirstContact, getBallGroup } from "./rules.js";
 import { norm, mul, add, sub, perp, dot, dist, clamp } from "./vec.js";
 
+import { COSMETIC_BACKGROUNDS } from "./storage.js";
+
 // Physics <-> Base Pixel coordinate conversions
 export function physToPx(x, y) {
   return {
@@ -18,6 +20,28 @@ export function pxToPhys(x, y) {
     x: (x - CFG.PLAYFIELD_PX.x) / CFG.PHYS_TO_PX,
     y: (y - CFG.PLAYFIELD_PX.y) / CFG.PHYS_TO_PX,
   };
+}
+
+// Render Room / Parlor Background
+export function renderRoomBackground(ctx, bgId = "DEFAULT") {
+  const bgDef = COSMETIC_BACKGROUNDS.find((b) => b.id === bgId) || COSMETIC_BACKGROUNDS[0];
+  const bgGrad = ctx.createRadialGradient(256, 144, 40, 256, 144, 280);
+  bgGrad.addColorStop(0, bgDef.light);
+  bgGrad.addColorStop(0.6, bgDef.color);
+  bgGrad.addColorStop(1, bgDef.dark);
+
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
+
+  // Subtle luxury floor patterns
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.12)";
+  ctx.lineWidth = 1;
+  for (let y = 50; y < CFG.BASE_H; y += 28) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(CFG.BASE_W, y);
+    ctx.stroke();
+  }
 }
 
 // Render complete 32-bit luxury pool table

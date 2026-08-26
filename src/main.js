@@ -7,6 +7,7 @@ import { matchScene } from "./scenes/match.js";
 import { tournamentScene } from "./scenes/tournament.js";
 import { leaderboardScene } from "./scenes/leaderboard.js";
 import { settingsScene } from "./scenes/settings.js";
+import { achievementsScene } from "./scenes/achievements.js";
 
 // Verify core physics invariant at boot
 console.assert(
@@ -27,6 +28,7 @@ sceneManager.register("match", matchScene);
 sceneManager.register("tournament", tournamentScene);
 sceneManager.register("leaderboard", leaderboardScene);
 sceneManager.register("settings", settingsScene);
+sceneManager.register("achievements", achievementsScene);
 
 export { go };
 

@@ -181,7 +181,17 @@ export function bakeCueStick(cueSkin = "DEFAULT") {
   let tipColor = PAL.CYAN;
   let jointColor = PAL.GOLD;
 
-  if (cueSkin === "MIDNIGHT") {
+  if (cueSkin === "ASHOKA") {
+    buttGradColors = ["#1e3a8a", "#0f172a"];
+    shaftColor = "#fde047";
+    tipColor = PAL.CYAN;
+    jointColor = "#eab308";
+  } else if (cueSkin === "DESI_CLUB") {
+    buttGradColors = ["#78350f", "#3b1a07"];
+    shaftColor = "#fcd34d";
+    tipColor = PAL.YELLOW;
+    jointColor = PAL.BRASS;
+  } else if (cueSkin === "MIDNIGHT") {
     buttGradColors = ["#6927b5", "#270b4a"];
     shaftColor = "#c5c0db";
     tipColor = PAL.MAGENTA;
@@ -201,6 +211,11 @@ export function bakeCueStick(cueSkin = "DEFAULT") {
     buttGradColors = ["#ff2244", "#770011"];
     shaftColor = "#ffaa66";
     tipColor = PAL.YELLOW;
+  } else if (cueSkin === "KOHINOOR") {
+    buttGradColors = ["#e2e8f0", "#94a3b8"];
+    shaftColor = "#f8fafc";
+    tipColor = "#00f0ff";
+    jointColor = "#ffffff";
   }
 
   // 1. Chalked Tip (x = 0..1)

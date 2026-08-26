@@ -2,7 +2,7 @@ import { CFG } from "../config.js";
 import { PAL } from "../palette.js";
 import { SPRITES } from "../sprites.js";
 import { CUPS, createTournamentBracket, advanceTournamentRound } from "../tournament.js";
-import { loadSave, saveImmediate } from "../storage.js";
+import { loadSave, saveImmediate, unlockAchievement } from "../storage.js";
 import { computeRunScore } from "../scoring.js";
 import { renderPanel, renderButton } from "../ui.js";
 import { renderCRTEffect } from "../render.js";
@@ -354,6 +354,12 @@ export const tournamentScene = {
         save.career.titles[this.bracket.cupId] = (save.career.titles[this.bracket.cupId] || 0) + 1;
         save.activeTournament = null;
         saveImmediate(save);
+
+        unlockAchievement("CHAK_DE");
+        if (this.bracket.cupId === "CHAMPION") {
+          unlockAchievement("BAHUBALI");
+        }
+
         go("leaderboard");
       }
     }
