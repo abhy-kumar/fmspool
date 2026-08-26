@@ -8,6 +8,7 @@ import { InputController } from "../input.js";
 import { chooseShot, chooseBallInHand } from "../ai.js";
 import { matchScore, getTier } from "../scoring.js";
 import { loadSave, saveMatchSnapshot, clearMatchSnapshot, saveImmediate, loadSettings, unlockAchievement } from "../storage.js";
+import { advanceTournamentRound } from "../tournament.js";
 import { submitRun, checkQualifiesTop10 } from "../cloud.js";
 import { renderPanel, renderButton, ArcadeKeyboard } from "../ui.js";
 import { makeRng } from "../rng.js";
@@ -15,6 +16,24 @@ import { go } from "../sceneManager.js";
 import { audio } from "../audio.js";
 import { fromAngle, mul, dist, clamp, lerpAngle } from "../vec.js";
 import { POCKETS } from "../table.js";
+
+function wrapText(text, maxChars) {
+  if (!text) return [];
+  const words = text.split(" ");
+  const lines = [];
+  let cur = "";
+
+  words.forEach((w) => {
+    if ((cur + (cur ? " " : "") + w).length <= maxChars) {
+      cur += (cur ? " " : "") + w;
+    } else {
+      if (cur) lines.push(cur);
+      cur = w;
+    }
+  });
+  if (cur) lines.push(cur);
+  return lines;
+}
 
 export const matchScene = {
   name: "match",
@@ -24,6 +43,7 @@ export const matchScene = {
   modeKey: "EXHIBITION",
   tournamentBracket: null,
   tournamentRound: null,
+  opponentName: "CHALK",
 
   // Shot resolution
   shotReport: null,
@@ -71,10 +91,39 @@ export const matchScene = {
     } else {
       this.difficultyId = params.difficulty || "AMATEUR";
       this.modeKey = params.mode || "EXHIBITION";
-      this.tournamentBracket = params.bracket || null;
+      this.tournamentBracket = params.bracket || save.activeTournament || null;
       this.tournamentRound = params.round || null;
       this.state = createMatchState(Date.now(), "PLAYER");
     }
+
+    // Pick opponent name based on tournament or randomized pool
+    if (this.tournamentBracket) {
+      const b = this.tournamentBracket;
+      if (b.round === "QF" && b.qf && b.qf[0] && b.qf[0].p2) {
+        this.opponentName = b.qf[0].p2.name;
+      } else if (b.round === "SF" && b.sf && b.sf[0] && b.sf[0].p2) {
+        this.opponentName = b.sf[0].p2.name;
+      } else if (b.round === "FINAL" && b.finals && b.finals[0] && b.finals[0].p2) {
+        this.opponentName = b.finals[0].p2.name;
+      } else {
+        const pool = AI_PERSONALITIES.filter((a) => a.tier === this.difficultyId);
+        this.opponentName = pool.length ? pool[Math.floor(Math.random() * pool.length)].name : "CHALK";
+      }
+    } else {
+      const pool = AI_PERSONALITIES.filter((a) => a.tier === this.difficultyId);
+      this.opponentName = pool.length ? pool[Math.floor(Math.random() * pool.length)].name : "CHALK";
+    }
+
+    // Ensure stats are never uninitialized
+    if (!this.state.stats) {
+      this.state.stats = { PLAYER: {}, AI: {} };
+    }
+    this.state.stats.PLAYER = this.state.stats.PLAYER || {};
+    this.state.stats.AI = this.state.stats.AI || {};
+    this.state.stats.PLAYER.totalShotSeconds = Number(this.state.stats.PLAYER.totalShotSeconds) || 0;
+    this.state.stats.PLAYER.shots = Number(this.state.stats.PLAYER.shots) || 0;
+    this.state.stats.PLAYER.ownPots = Number(this.state.stats.PLAYER.ownPots) || 0;
+    this.state.lastShotTime = Date.now();
 
     this.input.aimAngle = 0;
     this.input.targetAimAngle = 0;
@@ -210,7 +259,7 @@ export const matchScene = {
       .then((shot) => {
         this.aiPlannedShot = shot || this.fallbackAIShot();
         if (shot && shot.kind === "SAFETY") {
-          this.state.message = "AI: SAFETY PLAY";
+          this.state.message = `${this.opponentName}: SAFETY PLAY`;
           this.state.messageTimer = 2.0;
         }
       })
@@ -296,7 +345,6 @@ export const matchScene = {
     const won = this.state.winner === "PLAYER";
     if (won) {
       audio.playTrack("VICTORY");
-      // Victory Achievements
       if (this.difficultyId === "PRO" || this.difficultyId === "LEGEND") {
         const ach = unlockAchievement("DON_INTEZAAR");
         if (ach) this.showAchievementToast(ach);
@@ -338,13 +386,19 @@ export const matchScene = {
     const save = loadSave();
     save.career.matchesPlayed++;
     if (won) save.career.matchesWon++;
-    save.career.shots += this.state.stats.PLAYER.shots;
-    save.career.ownPots += this.state.stats.PLAYER.ownPots;
-    save.career.fouls += this.state.stats.PLAYER.fouls;
-    save.career.longestRun = Math.max(save.career.longestRun, this.state.stats.PLAYER.longestRun);
-    save.career.bestRunScore = Math.max(save.career.bestRunScore, res.score);
+    save.career.shots += (this.state.stats.PLAYER.shots || 0);
+    save.career.ownPots += (this.state.stats.PLAYER.ownPots || 0);
+    save.career.fouls += (this.state.stats.PLAYER.fouls || 0);
+    save.career.longestRun = Math.max(save.career.longestRun || 0, this.state.stats.PLAYER.longestRun || 0);
+    save.career.bestRunScore = Math.max(save.career.bestRunScore || 0, res.score || 0);
     save.career.runsPlayed++;
     save.coins = (save.coins || 0) + this.resultsData.coinsEarned;
+
+    // Advance Tournament Bracket if in tournament mode
+    if (this.tournamentBracket) {
+      advanceTournamentRound(this.tournamentBracket, won, res.score, makeRng(Date.now()));
+      save.activeTournament = this.tournamentBracket;
+    }
 
     saveImmediate(save);
 
@@ -376,11 +430,11 @@ export const matchScene = {
       cup: this.tournamentBracket ? this.tournamentBracket.cupId : null,
       won,
       stats: {
-        shots: this.state.stats.PLAYER.shots,
-        ownPots: this.state.stats.PLAYER.ownPots,
-        fouls: this.state.stats.PLAYER.fouls,
-        longestRun: this.state.stats.PLAYER.longestRun,
-        seconds: Math.round(this.state.stats.PLAYER.totalShotSeconds),
+        shots: this.state.stats.PLAYER.shots || 0,
+        ownPots: this.state.stats.PLAYER.ownPots || 0,
+        fouls: this.state.stats.PLAYER.fouls || 0,
+        longestRun: this.state.stats.PLAYER.longestRun || 0,
+        seconds: Math.round(this.state.stats.PLAYER.totalShotSeconds || 0),
       },
     }, save);
   },
@@ -440,26 +494,36 @@ export const matchScene = {
 
   renderAchievementToast(ctx) {
     const ach = this.achievementToast;
-    const toastW = 320;
-    const toastH = 34;
+    const toastW = 340;
+    const toastH = 46;
     const tx = Math.round(CFG.BASE_W / 2 - toastW / 2);
-    const ty = 50;
+    const ty = 48;
 
-    // Toast Container
+    // Toast Container with Gold Border
     ctx.fillStyle = PAL.DARKEST;
     ctx.fillRect(tx, ty, toastW, toastH);
     ctx.strokeStyle = PAL.GOLD;
     ctx.lineWidth = 1.5;
     ctx.strokeRect(tx, ty, toastW, toastH);
 
-    ctx.fillStyle = PAL.YELLOW;
-    ctx.font = '8px "Press Start 2P", monospace';
+    // Title
+    ctx.fillStyle = PAL.GOLD;
+    ctx.font = '7px "Press Start 2P", monospace';
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.fillText(`ACHIEVEMENT: ${ach.title} (+${ach.coins} C)`, tx + toastW / 2, ty + 6);
+    ctx.fillText(`ACHIEVEMENT: ${ach.title}`, tx + toastW / 2, ty + 6);
 
+    // Pop culture quote (Cleanly wrapped)
     ctx.fillStyle = PAL.CYAN;
-    ctx.fillText(`"${ach.quote}"`, tx + toastW / 2, ty + 20);
+    ctx.font = '6px "Press Start 2P", monospace';
+    const quoteLines = wrapText(`"${ach.quote}"`, 44);
+    if (quoteLines[0]) ctx.fillText(quoteLines[0], tx + toastW / 2, ty + 18);
+    if (quoteLines[1]) ctx.fillText(quoteLines[1], tx + toastW / 2, ty + 27);
+
+    // Reward line
+    ctx.fillStyle = PAL.YELLOW;
+    ctx.font = '6px "Press Start 2P", monospace';
+    ctx.fillText(`+${ach.coins} COINS AWARDED`, tx + toastW / 2, ty + 36);
   },
 
   renderHUD(ctx) {
@@ -515,15 +579,14 @@ export const matchScene = {
     }
 
     // AI Block (Right)
-    const aiDef = AI_PERSONALITIES.find((a) => a.tier === this.difficultyId) || AI_PERSONALITIES[0];
-    const portrait = SPRITES.portraits[aiDef.name];
+    const portrait = SPRITES.portraits[this.opponentName] || SPRITES.portraits["CHALK"];
     if (portrait) {
       ctx.drawImage(portrait, CFG.BASE_W - 22, 6);
     }
 
     ctx.fillStyle = this.state.turn === "AI" ? PAL.CYAN : PAL.WHITE;
     ctx.textAlign = "right";
-    ctx.fillText(aiDef.name, CFG.BASE_W - 26, 6);
+    ctx.fillText(this.opponentName, CFG.BASE_W - 26, 6);
 
     const aiGroup = this.state.groups.AI;
     if (aiGroup) {
@@ -562,7 +625,7 @@ export const matchScene = {
       const isPlayer = this.state.turn === "PLAYER";
       ctx.font = '8px "Press Start 2P", monospace';
       ctx.fillStyle = isPlayer ? PAL.CYAN : PAL.MAGENTA;
-      ctx.fillText(isPlayer ? "YOUR TURN" : `${aiDef.name}'S TURN`, msgX, 14);
+      ctx.fillText(isPlayer ? "YOUR TURN" : `${this.opponentName}'S TURN`, msgX, 14);
     }
   },
 
@@ -605,15 +668,17 @@ export const matchScene = {
       ctx.strokeRect(barStartX, my, barW, 10);
 
       ctx.fillStyle = PAL.CYAN;
-      ctx.fillRect(barStartX + 1, my + 1, Math.round((barW - 2) * clamp(m.val, 0, 1)), 8);
+      const fillW = Math.round((barW - 2) * clamp(m.val, 0, 1));
+      ctx.fillRect(barStartX + 1, my + 1, fillW, 8);
 
       ctx.textAlign = "right";
-      ctx.fillText(`${Math.round(m.val * 100)}%`, 430, my + 2);
+      ctx.fillText(`${Math.round(clamp(m.val, 0, 1) * 100)}%`, 430, my + 2);
     });
 
     ctx.fillStyle = PAL.SILVER;
     ctx.textAlign = "center";
-    const fStr = `S:${(r.components.composite).toFixed(2)} x DIFF:${r.diffMult.toFixed(2)} x MODE:${r.modeMult.toFixed(2)} = ${r.score}`;
+    const compScore = isNaN(r.components.composite) ? "0.50" : r.components.composite.toFixed(2);
+    const fStr = `S:${compScore} x DIFF:${r.diffMult.toFixed(2)} x MODE:${r.modeMult.toFixed(2)} = ${r.score}`;
     ctx.fillText(fStr, 256, 182);
 
     ctx.fillStyle = PAL.YELLOW;

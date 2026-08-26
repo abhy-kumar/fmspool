@@ -69,6 +69,7 @@ export function lerpVec(a, b, t) {
 }
 
 export function clamp(v, min, max) {
+  if (isNaN(v) || typeof v !== "number") return min;
   return Math.max(min, Math.min(max, v));
 }
 

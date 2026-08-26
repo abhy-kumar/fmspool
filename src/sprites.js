@@ -277,23 +277,47 @@ export function bakeBallShadow() {
   SPRITES.ballShadow = canvas;
 }
 
-// 32-Bit AI Portraits
+// 32-Bit AI Portraits with Expanded 24 Character Roster
 export const AI_PERSONALITIES = [
-  { name: "CHALK",   tier: "ROOKIE",  seed: 101, taunt: "Rack 'em up, rookie." },
-  { name: "DIAMOND", tier: "ROOKIE",  seed: 102, taunt: "I only play for fun. Mostly." },
-  { name: "SNOOKER", tier: "AMATEUR", seed: 103, taunt: "You'll never see the ball again." },
-  { name: "BANKS",   tier: "AMATEUR", seed: 104, taunt: "Off two rails. Watch." },
-  { name: "KISS",    tier: "PRO",     seed: 105, taunt: "Everything's a kiss shot." },
-  { name: "SCRATCH", tier: "PRO",     seed: 106, taunt: "I never scratch. You will." },
-  { name: "THE RUN", tier: "LEGEND",  seed: 107, taunt: "You get one shot. The break." },
+  // Rookies
+  { name: "CHALK",    tier: "ROOKIE",  seed: 101, taunt: "Rack 'em up, rookie." },
+  { name: "DIAMOND",  tier: "ROOKIE",  seed: 102, taunt: "I only play for fun. Mostly." },
+  { name: "CIRCUIT",  tier: "ROOKIE",  seed: 103, taunt: "Bole toh ekdum jhakaas shot!" },
+  { name: "RANGILA",  tier: "ROOKIE",  seed: 104, taunt: "Table pe sab barabar hai." },
+  { name: "SHERU",    tier: "ROOKIE",  seed: 105, taunt: "Seedha pocket mein!" },
+  { name: "LUCKY",    tier: "ROOKIE",  seed: 106, taunt: "Luck is on my side today." },
+
+  // Amateurs
+  { name: "SNOOKER",  tier: "AMATEUR", seed: 201, taunt: "You'll never see the ball again." },
+  { name: "BANKS",    tier: "AMATEUR", seed: 202, taunt: "Off two rails. Watch." },
+  { name: "VIRU",     tier: "AMATEUR", seed: 203, taunt: "Sholay break incoming!" },
+  { name: "KABIR",    tier: "AMATEUR", seed: 204, taunt: "Sattar minute nahi, 2 minute." },
+  { name: "BLAZE",    tier: "AMATEUR", seed: 205, taunt: "Hot cue, clean table." },
+  { name: "STRIKER",  tier: "AMATEUR", seed: 206, taunt: "Never miss the head ball." },
+
+  // Pros
+  { name: "KISS",     tier: "PRO",     seed: 301, taunt: "Everything's a kiss shot." },
+  { name: "SCRATCH",  tier: "PRO",     seed: 302, taunt: "I never scratch. You will." },
+  { name: "FAIZAL",   tier: "PRO",     seed: 303, taunt: "Sabka badla lega re Faizal." },
+  { name: "ROCKY",    tier: "PRO",     seed: 304, taunt: "Violence likes me, I avoid." },
+  { name: "WICK",     tier: "PRO",     seed: 305, taunt: "Yeah, I'm thinking I'm back." },
+  { name: "MAHARAJ",  tier: "PRO",     seed: 306, taunt: "Rajputi shaan on this felt." },
+
+  // Legends
+  { name: "THE RUN",  tier: "LEGEND",  seed: 401, taunt: "You get one shot. The break." },
+  { name: "MOGAMBO",  tier: "LEGEND",  seed: 402, taunt: "Mogambo khush hua!" },
+  { name: "GABBAR",   tier: "LEGEND",  seed: 403, taunt: "Kitne aadmi the table pe?" },
+  { name: "DON",      tier: "LEGEND",  seed: 404, taunt: "Don ko harana mushkil hi nahi..." },
+  { name: "BAHUBALI", tier: "LEGEND",  seed: 405, taunt: "Mera vachan hi hai shasan." },
+  { name: "LEBOWSKI", tier: "LEGEND",  seed: 406, taunt: "The Dude always abides." },
 ];
 
 export function bakeAIPortraits() {
-  const skinTones = ["#ffd08a", "#f5ad58", "#e69138", "#ffc570", "#d47a28"];
-  const hairColors = [PAL.MAROON, PAL.DARKEST, PAL.YELLOW, PAL.RED, PAL.BLUE];
+  const skinTones = ["#ffd08a", "#f5ad58", "#e69138", "#ffc570", "#d47a28", "#c67020"];
+  const hairColors = [PAL.MAROON, PAL.DARKEST, PAL.YELLOW, PAL.RED, PAL.BLUE, "#592b0e", "#1b1433"];
 
   AI_PERSONALITIES.forEach((ai) => {
-    const rng = makeRng(ai.seed);
+    const rng = makeRng(ai.seed || 100);
     const { canvas, ctx } = createOffscreen(18, 18);
 
     // Card frame
@@ -312,11 +336,11 @@ export function bakeAIPortraits() {
     ctx.fillRect(3, 3, 12, 4);
     ctx.fillRect(3, 5, 2, 5);
 
-    const hasShades = rng() > 0.4;
-    if (hasShades || ai.tier === "LEGEND") {
+    const hasShades = rng() > 0.4 || ai.tier === "LEGEND" || ai.tier === "PRO";
+    if (hasShades) {
       ctx.fillStyle = PAL.BLACK;
       ctx.fillRect(5, 7, 8, 3);
-      ctx.fillStyle = PAL.CYAN;
+      ctx.fillStyle = ai.tier === "LEGEND" ? PAL.GOLD : PAL.CYAN;
       ctx.fillRect(6, 7, 2, 1);
       ctx.fillRect(10, 7, 2, 1);
     } else {
@@ -331,7 +355,7 @@ export function bakeAIPortraits() {
     ctx.fillStyle = PAL.RED;
     ctx.fillRect(7, 11, 4, 1);
 
-    ctx.fillStyle = ai.tier === "LEGEND" ? PAL.MAGENTA : PAL.CYAN;
+    ctx.fillStyle = ai.tier === "LEGEND" ? PAL.GOLD : (ai.tier === "PRO" ? PAL.MAGENTA : PAL.CYAN);
     ctx.fillRect(2, 14, 14, 3);
 
     SPRITES.portraits[ai.name] = canvas;
