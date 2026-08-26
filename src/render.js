@@ -22,25 +22,69 @@ export function pxToPhys(x, y) {
   };
 }
 
-// Render Room / Parlor Background
+// Render Room / Parlor Background with distinct visual architecture
 export function renderRoomBackground(ctx, bgId = "DEFAULT") {
   const bgDef = COSMETIC_BACKGROUNDS.find((b) => b.id === bgId) || COSMETIC_BACKGROUNDS[0];
-  const bgGrad = ctx.createRadialGradient(256, 144, 40, 256, 144, 280);
+
+  // 1. Base Room Atmosphere & Lighting Vignette
+  const bgGrad = ctx.createRadialGradient(256, 144, 30, 256, 144, 280);
   bgGrad.addColorStop(0, bgDef.light);
-  bgGrad.addColorStop(0.6, bgDef.color);
+  bgGrad.addColorStop(0.55, bgDef.color);
   bgGrad.addColorStop(1, bgDef.dark);
 
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
 
-  // Subtle luxury floor patterns
-  ctx.strokeStyle = "rgba(0, 0, 0, 0.12)";
-  ctx.lineWidth = 1;
-  for (let y = 50; y < CFG.BASE_H; y += 28) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(CFG.BASE_W, y);
-    ctx.stroke();
+  // 2. Distinct Architectural Themes
+  if (bgId === "HAVELI") {
+    // Rajasthani Haveli Sandstone tile grid & warm ambient glow
+    ctx.strokeStyle = "rgba(255, 180, 100, 0.10)";
+    ctx.lineWidth = 1;
+    for (let x = 0; x < CFG.BASE_W; x += 32) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CFG.BASE_H); ctx.stroke();
+    }
+    for (let y = 0; y < CFG.BASE_H; y += 32) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CFG.BASE_W, y); ctx.stroke();
+    }
+  } else if (bgId === "NEON") {
+    // Cyberpunk Perspective Neon Grid & Laser reflection
+    ctx.strokeStyle = "rgba(0, 240, 255, 0.18)";
+    ctx.lineWidth = 1;
+    for (let y = 46; y < CFG.BASE_H; y += 22) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CFG.BASE_W, y); ctx.stroke();
+    }
+    for (let x = -80; x < CFG.BASE_W + 80; x += 34) {
+      ctx.beginPath(); ctx.moveTo(256, 0); ctx.lineTo(x, CFG.BASE_H); ctx.stroke();
+    }
+  } else if (bgId === "PALACE") {
+    // Maharaja Palace Royal Diamond Marble
+    ctx.strokeStyle = "rgba(255, 215, 0, 0.14)";
+    ctx.lineWidth = 1;
+    for (let d = -CFG.BASE_W; d < CFG.BASE_W * 2; d += 36) {
+      ctx.beginPath(); ctx.moveTo(d, 0); ctx.lineTo(d + CFG.BASE_H, CFG.BASE_H); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(d, 0); ctx.lineTo(d - CFG.BASE_H, CFG.BASE_H); ctx.stroke();
+    }
+  } else if (bgId === "MUMBAI") {
+    // Marine Drive Jazz Lounge Midnight Herringbone
+    ctx.strokeStyle = "rgba(42, 130, 210, 0.12)";
+    ctx.lineWidth = 1;
+    for (let y = 44; y < CFG.BASE_H; y += 18) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CFG.BASE_W, y); ctx.stroke();
+    }
+  } else if (bgId === "CLUB") {
+    // Colonial Gymkhana Vintage Teakwood Planks
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.28)";
+    ctx.lineWidth = 1.5;
+    for (let y = 46; y < CFG.BASE_H; y += 20) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CFG.BASE_W, y); ctx.stroke();
+    }
+  } else {
+    // Classic Retro Arcade Oak Planks
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.18)";
+    ctx.lineWidth = 1;
+    for (let y = 48; y < CFG.BASE_H; y += 24) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CFG.BASE_W, y); ctx.stroke();
+    }
   }
 }
 

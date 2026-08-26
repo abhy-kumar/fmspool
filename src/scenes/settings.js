@@ -54,11 +54,14 @@ export const settingsScene = {
   update(dt) {},
 
   render(ctx) {
-    // Room Background
-    renderRoomBackground(ctx, this.settings.selectedBg || "DEFAULT");
+    // Dynamic Room Background (Previews active room selection in real-time)
+    const activeBgToRender = this.cosmeticTab === "BACKGROUNDS"
+      ? (COSMETIC_BACKGROUNDS[this.previewBgIdx] ? COSMETIC_BACKGROUNDS[this.previewBgIdx].id : "DEFAULT")
+      : (this.settings.selectedBg || "DEFAULT");
+    renderRoomBackground(ctx, activeBgToRender);
 
-    // Dark tint plate
-    ctx.fillStyle = "rgba(10, 8, 20, 0.86)";
+    // Dark tint plate (slightly lighter 0.78 so room atmosphere is clear)
+    ctx.fillStyle = "rgba(10, 8, 20, 0.78)";
     ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
 
     // Top Header
@@ -410,8 +413,22 @@ export const settingsScene = {
       if (!isUnlocked) {
         if ((save.coins || 0) >= curItem.cost) {
           save.coins -= curItem.cost;
-          save.unlocks[unlockKey].push(curItem.id);
+          if (!save.unlocks[unlockKey].includes(curItem.id)) {
+            save.unlocks[unlockKey].push(curItem.id);
+          }
           saveImmediate(save);
+
+          // Auto-equip on purchase
+          if (this.cosmeticTab === "CUES") {
+            s.selectedCue = curItem.id;
+            bakeCueStick(curItem.id);
+          } else if (this.cosmeticTab === "FELTS") {
+            s.selectedFelt = curItem.id;
+            bakeFelt(curItem.color, curItem.light, curItem.dark);
+          } else if (this.cosmeticTab === "BACKGROUNDS") {
+            s.selectedBg = curItem.id;
+          }
+          saveSettings(s);
           audio.playSfx("uiSelect");
         } else {
           audio.playSfx("foul");

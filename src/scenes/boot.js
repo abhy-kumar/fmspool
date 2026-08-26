@@ -1,7 +1,7 @@
 import { CFG } from "../config.js";
 import { PAL } from "../palette.js";
-import { bakeAllSprites } from "../sprites.js";
-import { loadSave, loadSettings } from "../storage.js";
+import { bakeAllSprites, bakeCueStick, bakeFelt } from "../sprites.js";
+import { loadSave, loadSettings, COSMETIC_FELTS } from "../storage.js";
 import { flushOutbox } from "../cloud.js";
 import { go } from "../sceneManager.js";
 import { audio } from "../audio.js";
@@ -22,10 +22,18 @@ export const bootScene = {
     }
 
     try {
-      // 2. Load Local Save & Settings
+      // 2. Load Local Save & Settings and apply cosmetics
       loadSave();
       const settings = loadSettings();
       audio.setVolumes(settings.masterVol, settings.musicVol, settings.sfxVol);
+
+      if (settings.selectedCue) {
+        bakeCueStick(settings.selectedCue);
+      }
+      if (settings.selectedFelt) {
+        const curFelt = COSMETIC_FELTS.find((f) => f.id === settings.selectedFelt);
+        if (curFelt) bakeFelt(curFelt.color, curFelt.light, curFelt.dark);
+      }
     } catch (e) {
       console.error("[Boot] Error loading saves/settings:", e);
     }
@@ -58,24 +66,24 @@ export const bootScene = {
   update(dt) {
     this.loadTimer += dt;
     // Transition to title after quick splash
-    if (this.isReady && this.loadTimer >= 0.4) {
+    if (this.isReady && this.loadTimer >= 0.3) {
       go("title");
     }
   },
 
   render(ctx) {
-    ctx.fillStyle = PAL.BLACK;
+    ctx.fillStyle = PAL.DARKEST;
     ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
 
-    ctx.fillStyle = PAL.WHITE;
-    ctx.font = '16px "Press Start 2P", monospace';
+    ctx.fillStyle = PAL.CYAN;
+    ctx.font = '10px "Press Start 2P", monospace';
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("FMS POOL", Math.round(CFG.BASE_W / 2), 130);
+    ctx.fillText("FMS POOL", CFG.BASE_W / 2, CFG.BASE_H / 2 - 10);
 
-    ctx.fillStyle = PAL.CYAN;
+    ctx.fillStyle = PAL.YELLOW;
     ctx.font = '8px "Press Start 2P", monospace';
-    ctx.fillText("LOADING...", Math.round(CFG.BASE_W / 2), 160);
+    ctx.fillText("LOADING...", CFG.BASE_W / 2, CFG.BASE_H / 2 + 10);
   },
 
   onPointer() {},
