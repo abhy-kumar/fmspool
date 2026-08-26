@@ -20,7 +20,7 @@ export function pxToPhys(x, y) {
   };
 }
 
-// Render complete static table (rails, dithered felt, diamonds, pockets, spots)
+// Render complete static table
 export function renderTable(ctx) {
   const px = CFG.PLAYFIELD_PX.x;
   const py = CFG.PLAYFIELD_PX.y;
@@ -52,7 +52,7 @@ export function renderTable(ctx) {
   ctx.lineWidth = 1;
   ctx.strokeRect(px - 1, py - 1, pw + 2, ph + 2);
 
-  // 2. Playfield Felt (pre-baked dither)
+  // 2. Playfield Felt
   if (SPRITES.felt) {
     ctx.drawImage(SPRITES.felt, px, py);
   } else {
@@ -60,7 +60,6 @@ export function renderTable(ctx) {
     ctx.fillRect(px, py, pw, ph);
   }
 
-  // 1px FELT_DARK line bordering felt
   ctx.strokeStyle = PAL.FELT_DARK;
   ctx.lineWidth = 1;
   ctx.strokeRect(px, py, pw, ph);
@@ -83,7 +82,7 @@ export function renderTable(ctx) {
   ctx.fillRect(Math.round(headSpotPx.x - 1), Math.round(headSpotPx.y - 1), 3, 3);
   ctx.fillRect(Math.round(footSpotPx.x - 1), Math.round(footSpotPx.y - 1), 3, 3);
 
-  // 4. Rail Diamonds (3x3 brass plus-shape)
+  // 4. Rail Diamonds
   const drawDiamond = (dx, dy) => {
     ctx.fillStyle = PAL.BRASS;
     ctx.fillRect(Math.round(dx), Math.round(dy - 1), 1, 3);
@@ -100,7 +99,7 @@ export function renderTable(ctx) {
   drawDiamond(px - 7, diamondY);
   drawDiamond(px + pw + 7, diamondY);
 
-  // 5. Pockets (6 pockets)
+  // 5. Pockets
   POCKETS.forEach((p) => {
     const pos = physToPx(p.x, p.y);
     const radius = p.r * CFG.PHYS_TO_PX;
@@ -124,12 +123,12 @@ export function renderTable(ctx) {
   });
 }
 
-// Render all balls (with pulsing halo on legal targets and shadows)
+// Render all balls
 export function renderBalls(ctx, balls, matchState = null) {
   const time = performance.now() / 1000;
   const pulse = 0.5 + 0.5 * Math.sin(time * 6);
 
-  // Step 1: Draw legal target ball halos (if aiming / human turn)
+  // 1. Legal target ball halos
   if (matchState && matchState.turn === "PLAYER" && (matchState.phase === "AIMING" || matchState.phase === "CALL_POCKET")) {
     balls.forEach((ball) => {
       if (!ball.inPlay || ball.id === 0) return;
@@ -148,7 +147,7 @@ export function renderBalls(ctx, balls, matchState = null) {
     });
   }
 
-  // Step 2: Draw all ball shadows
+  // 2. Ball shadows
   if (SPRITES.ballShadow) {
     balls.forEach((ball) => {
       if (!ball.inPlay) return;
@@ -161,7 +160,7 @@ export function renderBalls(ctx, balls, matchState = null) {
     });
   }
 
-  // Step 3: Draw all balls
+  // 3. Balls
   balls.forEach((ball) => {
     if (!ball.inPlay) return;
     const pos = physToPx(ball.x, ball.y);
@@ -178,17 +177,21 @@ export function renderBalls(ctx, balls, matchState = null) {
   });
 }
 
-// Render Cue Stick
+// Render Cue Stick (Tip is nearest cue ball at x=pullback, butt points away)
 export function renderCueStick(ctx, cueBall, aimAngle, power = 0, cueSkin = "DEFAULT") {
   if (!cueBall || !cueBall.inPlay || !SPRITES.cue) return;
 
   const pos = physToPx(cueBall.x, cueBall.y);
-  const pullback = 8 + power * 30; // 8px min gap + up to 30px pullback
+  // Ball radius is 4.5px on screen.
+  // Tip starts 7px from center (2.5px gap from ball rim) when power = 0.
+  // Pulls back up to 34px away from cue ball at 100% power.
+  const pullback = 7 + power * 27;
 
   ctx.save();
   ctx.translate(Math.round(pos.x), Math.round(pos.y));
-  ctx.rotate(aimAngle + Math.PI); // Point cue tip at cue ball
+  ctx.rotate(aimAngle + Math.PI); // Angle pointing away behind cue ball
 
+  // Draw sprite (Tip is at x=0, butt is at x=55)
   ctx.drawImage(
     SPRITES.cue,
     Math.round(pullback),
@@ -206,7 +209,7 @@ export function renderAimAssist(ctx, state, aimAngle, assistLevel = "FULL") {
   const cuePhys = { x: cue.x, y: cue.y };
   const dir = { x: Math.cos(aimAngle), y: Math.sin(aimAngle) };
 
-  // 1. Ray-cast against balls
+  // Ray-cast against balls
   let nearestHit = null;
   let minHitDist = Infinity;
   const collisionRadius = CFG.BALL_R * 2;
@@ -233,7 +236,7 @@ export function renderAimAssist(ctx, state, aimAngle, assistLevel = "FULL") {
     }
   }
 
-  // 2. Ray-cast against cushions
+  // Ray-cast against cushions
   let cushionDist = Infinity;
   let hitCushionNormal = null;
   const r = CFG.BALL_R;
@@ -257,11 +260,10 @@ export function renderAimAssist(ctx, state, aimAngle, assistLevel = "FULL") {
   const cuePx = physToPx(cuePhys.x, cuePhys.y);
 
   if (nearestHit && nearestHit.dist < cushionDist) {
-    // Hits an object ball first
     const isLegalTarget = isBallLegalFirstContact(nearestHit.target.id, state, state.turn);
     const ghostPx = physToPx(nearestHit.ghostPos.x, nearestHit.ghostPos.y);
 
-    // Aim Line (dashed WHITE if legal, RED if foul)
+    // Aim Line
     ctx.save();
     ctx.setLineDash([3, 3]);
     ctx.strokeStyle = isLegalTarget ? PAL.WHITE : PAL.RED;
@@ -272,14 +274,14 @@ export function renderAimAssist(ctx, state, aimAngle, assistLevel = "FULL") {
     ctx.stroke();
     ctx.restore();
 
-    // Ghost Ball (CYAN/WHITE outline if legal, RED outline if foul)
+    // Ghost Ball
     ctx.strokeStyle = isLegalTarget ? PAL.CYAN : PAL.RED;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(Math.round(ghostPx.x), Math.round(ghostPx.y), CFG.BALL_R * CFG.PHYS_TO_PX, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Target Legal / Foul Banner above ghost ball
+    // Target Legal / Foul Banner
     ctx.font = '8px "Press Start 2P", monospace';
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
@@ -299,7 +301,6 @@ export function renderAimAssist(ctx, state, aimAngle, assistLevel = "FULL") {
     }
 
     if (assistLevel !== "CUE_ONLY") {
-      // Deflection: Target ball departure (line of centers)
       const targetNormal = norm(sub(nearestHit.target, nearestHit.ghostPos));
       const targetLen = assistLevel === "HALF" ? 13 : 26;
       const targetEndPx = add(ghostPx, mul(targetNormal, targetLen));
@@ -311,7 +312,6 @@ export function renderAimAssist(ctx, state, aimAngle, assistLevel = "FULL") {
       ctx.lineTo(Math.round(targetEndPx.x), Math.round(targetEndPx.y));
       ctx.stroke();
 
-      // Cue Ball tangent departure
       const cueTangent = perp(targetNormal);
       const sign = dot(dir, cueTangent) >= 0 ? 1 : -1;
       const cueDir = mul(cueTangent, sign);
@@ -326,7 +326,6 @@ export function renderAimAssist(ctx, state, aimAngle, assistLevel = "FULL") {
       ctx.stroke();
     }
   } else if (cushionDist < Infinity) {
-    // Hits cushion first
     const hitPhys = add(cuePhys, mul(dir, cushionDist));
     const hitPx = physToPx(hitPhys.x, hitPhys.y);
 
@@ -353,18 +352,16 @@ export function renderAimAssist(ctx, state, aimAngle, assistLevel = "FULL") {
   }
 }
 
-// CRT Post-Effect (Scanlines + Vignette)
+// CRT Post-Effect
 export function renderCRTEffect(ctx) {
   const w = CFG.BASE_W;
   const h = CFG.BASE_H;
 
-  // 1. Scanlines on odd rows
   ctx.fillStyle = "rgba(0, 0, 0, 0.10)";
   for (let y = 1; y < h; y += 2) {
     ctx.fillRect(0, y, w, 1);
   }
 
-  // 2. Subtle Vignette edges
   ctx.fillStyle = "rgba(5, 4, 9, 0.18)";
   ctx.fillRect(0, 0, w, 2);
   ctx.fillRect(0, h - 2, w, 2);

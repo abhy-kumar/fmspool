@@ -54,10 +54,10 @@ export class InputController {
       this.aimAngle = this.targetAimAngle;
     }
 
-    // 3. Spacebar power oscillation
+    // 3. Spacebar power oscillation (smooth 2.0s period)
     if (this.spaceCharging) {
       this.spaceChargeTime += dt;
-      const t = (this.spaceChargeTime % 1.2) / 1.2;
+      const t = (this.spaceChargeTime % 2.0) / 2.0;
       const pingPong = t < 0.5 ? t * 2 : (1 - t) * 2;
       this.power = clamp(pingPong, CFG.MIN_POWER, CFG.MAX_POWER);
     }
@@ -73,7 +73,7 @@ export class InputController {
     const perpDist = Math.abs(toPointer.x * (-aimDir.y) - toPointer.y * (-aimDir.x));
 
     const onBall = Math.hypot(toPointer.x, toPointer.y) <= 16;
-    const onStick = rearDist >= 6 && rearDist <= 85 && perpDist <= 20;
+    const onStick = rearDist >= 4 && rearDist <= 90 && perpDist <= 22;
 
     return onBall || onStick;
   }
@@ -149,7 +149,8 @@ export class InputController {
         const toPointer = sub({ x: px, y: py }, cuePx);
         const rearDist = -(toPointer.x * aimDir.x + toPointer.y * aimDir.y);
         if (rearDist > 6) {
-          this.power = clamp((rearDist - 6) / 70, 0, CFG.MAX_POWER);
+          const norm = clamp((rearDist - 6) / 120, 0, 1);
+          this.power = clamp(Math.pow(norm, 1.25), 0, CFG.MAX_POWER);
         }
         return;
       }
@@ -176,8 +177,9 @@ export class InputController {
         const rearDist = -(toPointer.x * aimDir.x + toPointer.y * aimDir.y);
         const perpDist = Math.abs(toPointer.x * (-aimDir.y) - toPointer.y * (-aimDir.x));
 
-        // IF USER PUSHES POWER TO 0 (rearDist <= 6) OR MOVES OUT OF CORRIDOR -> ALLOW EDITING DIRECTION!
-        if (rearDist <= 6 || perpDist > 32) {
+        // When user pushes back toward cue ball (rearDist <= 4) or moves sideways (perpDist > 36)
+        // -> Cancel pull-back and smoothly allow editing aim direction!
+        if (rearDist <= 4 || perpDist > 36) {
           this.power = 0;
           this.isPullingBack = false;
           this.isDraggingAim = true;
@@ -185,7 +187,9 @@ export class InputController {
           const pointerPhys = pxToPhys(px, py);
           this.targetAimAngle = Math.atan2(pointerPhys.y - cuePhys.y, pointerPhys.x - cuePhys.x);
         } else {
-          this.power = clamp((rearDist - 6) / 70, 0, CFG.MAX_POWER);
+          // Smooth progressive power curve (120px drag travel)
+          const norm = clamp((rearDist - 6) / 120, 0, 1);
+          this.power = clamp(Math.pow(norm, 1.25), 0, CFG.MAX_POWER);
         }
       } else if (this.isDraggingAim && cue && cue.inPlay) {
         const cuePhys = { x: cue.x, y: cue.y };
@@ -208,7 +212,6 @@ export class InputController {
 
       if (this.isPullingBack) {
         this.isPullingBack = false;
-        // If power was pulled back above min threshold -> Shoot!
         if (this.power >= CFG.MIN_POWER && typeof onShoot === "function") {
           onShoot({
             angle: this.aimAngle,
@@ -217,7 +220,6 @@ export class InputController {
           });
           this.resetSpin();
         } else {
-          // Cancelled pull-back / 0 power -> Keep ready for aiming
           this.power = 0.35;
         }
       }
@@ -342,7 +344,6 @@ export class InputController {
   }
 
   renderControls(ctx, matchState) {
-    // 1. Fine Aim Buttons (◀ ▶)
     const drawBtn = (btn, text, held) => {
       ctx.fillStyle = held ? PAL.GREY : PAL.SLATE;
       ctx.fillRect(btn.x, btn.y, btn.w, btn.h);
@@ -359,7 +360,6 @@ export class InputController {
     drawBtn(this.fineLeftBtn, "<", this.fineLeftHeld);
     drawBtn(this.fineRightBtn, ">", this.fineRightHeld);
 
-    // 2. Pause Menu Button (☰)
     ctx.fillStyle = PAL.SLATE;
     ctx.fillRect(this.pauseBtn.x, this.pauseBtn.y, this.pauseBtn.w, this.pauseBtn.h);
     ctx.strokeStyle = PAL.SILVER;
@@ -371,7 +371,6 @@ export class InputController {
     ctx.textBaseline = "middle";
     ctx.fillText("=", this.pauseBtn.x + this.pauseBtn.w / 2, this.pauseBtn.y + this.pauseBtn.h / 2);
 
-    // 3. Power Bar
     const bar = this.powerBarRect;
     ctx.fillStyle = PAL.DARK;
     ctx.fillRect(bar.x - 2, bar.y - 2, bar.w + 4, bar.h + 4);
@@ -382,7 +381,6 @@ export class InputController {
     ctx.fillStyle = PAL.SILVER;
     ctx.font = '8px "Press Start 2P", monospace';
     ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
     ctx.fillText("PWR", bar.x + bar.w / 2, bar.y - 8);
 
     const numSegments = 8;
@@ -405,7 +403,6 @@ export class InputController {
       ctx.fillRect(bar.x + 2, segY, bar.w - 4, segH);
     }
 
-    // 4. Dedicated SHOOT Button
     const sb = this.shootBtn;
     ctx.fillStyle = this.isPullingBack ? PAL.RED : PAL.GREEN;
     ctx.fillRect(sb.x, sb.y, sb.w, sb.h);
@@ -418,7 +415,6 @@ export class InputController {
     ctx.textBaseline = "middle";
     ctx.fillText("HIT", sb.x + sb.w / 2, sb.y + sb.h / 2);
 
-    // 5. Spin Control Widget
     const sw = this.spinWidgetRect;
     ctx.fillStyle = PAL.DARK;
     ctx.fillRect(sw.x, sw.y, sw.w, sw.h);
@@ -440,7 +436,6 @@ export class InputController {
     ctx.fillStyle = PAL.RED;
     ctx.fillRect(Math.round(markerX - 1.5), Math.round(markerY - 1.5), 3, 3);
 
-    // 6. Ball-in-Hand Ghost Placement Display
     if (this.isPlacingBallInHand || matchState.phase === "BALL_IN_HAND" || matchState.phase === "PLACE_CUE_BREAK") {
       const gpx = physToPx(this.ballInHandPos.x, this.ballInHandPos.y);
       ctx.strokeStyle = this.ballInHandValid ? PAL.CYAN : PAL.RED;
