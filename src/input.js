@@ -1,15 +1,7 @@
 import { CFG } from "./config.js";
 import { PAL } from "./palette.js";
-import { view } from "./view.js";
 import { physToPx, pxToPhys } from "./render.js";
 import { clamp, lerpAngle, dist, fromAngle, mul, sub, add, dot } from "./vec.js";
-
-// Pointer travel, in base pixels, that corresponds to a full-power pull-back when
-// there is room for it. Shorter travel is substituted automatically when the cue
-// ball sits near an edge - see measureRearTravel.
-const PULL_TRAVEL_PX = 80;
-const MIN_PULL_TRAVEL_PX = 18;
-const PULL_DEAD_ZONE_PX = 4;
 
 export class InputController {
   constructor() {
@@ -25,8 +17,6 @@ export class InputController {
     this.isPullingBack = false;
     this.pullStartPos = { x: 0, y: 0 };
     this.pullStartRear = 0;
-    this.pullTravel = PULL_TRAVEL_PX;
-    this.atMaxPower = false;
     this.isPlacingBallInHand = false;
 
     this.ballInHandPos = { x: CFG.HEAD_SPOT.x, y: CFG.HEAD_SPOT.y };
@@ -42,9 +32,11 @@ export class InputController {
     this.powerBarRect = { x: 474, y: 52, w: 32, h: 140 };
     this.shootBtn = { x: 472, y: 198, w: 36, h: 24 };
     this.spinWidgetRect = { x: 472, y: 236, w: 36, h: 36 };
+
+    // Bottom-Left Utility Cluster (No overlap with top HUD!)
     this.fineLeftBtn = { x: 8, y: 254, w: 22, h: 22 };
     this.fineRightBtn = { x: 34, y: 254, w: 22, h: 22 };
-    this.pauseBtn = { x: 8, y: 8, w: 22, h: 22 };
+    this.pauseBtn = { x: 60, y: 254, w: 26, h: 22 };
   }
 
   resetSpin() {
@@ -95,21 +87,17 @@ export class InputController {
     const isHumanTurn = matchState.turn === "PLAYER";
     const canInteract = isHumanTurn && (matchState.phase === "AIMING" || matchState.phase === "BALL_IN_HAND" || matchState.phase === "PLACE_CUE_BREAK");
 
-    if (!canInteract) return;
-
-    // Hit-testing uses canvas-clamped coordinates; drags use the raw ones so a
-    // finger that leaves the letterboxed canvas keeps contributing travel.
     const px = e.x;
     const py = e.y;
-    const dragX = e.rawX !== undefined ? e.rawX : e.x;
-    const dragY = e.rawY !== undefined ? e.rawY : e.y;
 
     if (e.type === "pointerdown") {
-      // Check Pause button
+      // Check Pause / Menu button (always clickable)
       if (this.isInside(px, py, this.pauseBtn)) {
         if (typeof onPause === "function") onPause();
         return;
       }
+
+      if (!canInteract) return;
 
       // Check Ball in Hand Placement Phase
       if (matchState.phase === "BALL_IN_HAND" || matchState.phase === "PLACE_CUE_BREAK") {
@@ -150,7 +138,7 @@ export class InputController {
         return;
       }
 
-      // Check Power Bar (broad interactive area on right)
+      // Check Power Bar (interactive slider on right)
       if (this.isInside(px, py, this.powerBarRect) || (px >= 460 && px <= 512 && py >= 44 && py <= 196)) {
         this.isDraggingPower = true;
         this.updatePowerFromBar(py);
@@ -165,7 +153,6 @@ export class InputController {
         const aimDir = fromAngle(this.aimAngle);
         const toPointer = sub({ x: px, y: py }, cuePx);
         this.pullStartRear = Math.max(0, -(toPointer.x * aimDir.x + toPointer.y * aimDir.y));
-        this.pullTravel = this.measureRearTravel(this.pullStartPos, aimDir);
         return;
       }
 
@@ -178,6 +165,8 @@ export class InputController {
         this.aimAngle = this.targetAimAngle;
       }
     } else if (e.type === "pointermove") {
+      if (!canInteract) return;
+
       if (this.isPlacingBallInHand) {
         this.updateBallInHand(px, py, matchState);
       } else if (this.isDraggingSpin) {
@@ -188,17 +177,14 @@ export class InputController {
         const cuePx = physToPx(cue.x, cue.y);
         const aimDir = fromAngle(this.aimAngle);
 
-        // Calculate both absolute rear distance from cue ball AND relative drag delta
-        const toPointer = sub({ x: dragX, y: dragY }, cuePx);
+        const toPointer = sub({ x: px, y: py }, cuePx);
         const absRearDist = -(toPointer.x * aimDir.x + toPointer.y * aimDir.y);
         const perpDist = Math.abs(toPointer.x * (-aimDir.y) - toPointer.y * (-aimDir.x));
 
-        // Relative delta from where touch started (allows full power anywhere on table, even at edges!)
-        const dragDelta = sub({ x: dragX, y: dragY }, this.pullStartPos);
+        const dragDelta = sub({ x: px, y: py }, this.pullStartPos);
         const deltaRear = -(dragDelta.x * aimDir.x + dragDelta.y * aimDir.y);
         const effectiveRear = Math.max(absRearDist, this.pullStartRear + deltaRear);
 
-        // When user pushes stick back to 0 power (effectiveRear <= 4) or drags far sideways
         if (effectiveRear <= 4 || (perpDist > 42 && deltaRear < 20)) {
           this.power = 0;
           this.isPullingBack = false;
@@ -207,13 +193,8 @@ export class InputController {
           const pointerPhys = pxToPhys(px, py);
           this.targetAimAngle = Math.atan2(pointerPhys.y - cuePhys.y, pointerPhys.x - cuePhys.x);
         } else {
-          // Power travel is measured against the room actually available behind the
-          // cue ball. With a fixed 80px requirement a cue ball near a rail could only
-          // ever reach ~65% power, because the pointer ran out of screen first.
-          const travel = this.pullTravel || PULL_TRAVEL_PX;
-          const norm = clamp((effectiveRear - PULL_DEAD_ZONE_PX) / travel, 0, 1);
+          const norm = clamp((effectiveRear - 4) / 80, 0, 1);
           this.power = clamp(Math.pow(norm, 1.15), 0, CFG.MAX_POWER);
-          this.atMaxPower = this.power >= CFG.MAX_POWER - 0.001;
         }
       } else if (this.isDraggingAim && cue && cue.inPlay) {
         const cuePhys = { x: cue.x, y: cue.y };
@@ -236,7 +217,6 @@ export class InputController {
 
       if (this.isPullingBack) {
         this.isPullingBack = false;
-        this.atMaxPower = false;
         if (this.power >= CFG.MIN_POWER && typeof onShoot === "function") {
           onShoot({
             angle: this.aimAngle,
@@ -355,41 +335,6 @@ export class InputController {
     this.ballInHandValid = valid;
   }
 
-  // How far the pointer can travel straight backwards from `from` before it runs off
-  // the reachable area. Clamped so full power always stays achievable, and so a cue
-  // ball in open space still uses the familiar 80px stroke.
-  measureRearTravel(from, aimDir) {
-    const b = (view && view.baseBounds) || { minX: 0, minY: 0, maxX: CFG.BASE_W, maxY: CFG.BASE_H };
-    const dx = -aimDir.x;
-    const dy = -aimDir.y;
-
-    let room = Infinity;
-    if (dx > 0.0001) room = Math.min(room, (b.maxX - from.x) / dx);
-    else if (dx < -0.0001) room = Math.min(room, (b.minX - from.x) / dx);
-    if (dy > 0.0001) room = Math.min(room, (b.maxY - from.y) / dy);
-    else if (dy < -0.0001) room = Math.min(room, (b.minY - from.y) / dy);
-
-    if (!isFinite(room)) room = PULL_TRAVEL_PX;
-    // Leave a 2px margin so the very last pixel of screen is not required.
-    const usable = room - 2 - PULL_DEAD_ZONE_PX + this.pullStartRear;
-    return clamp(usable, MIN_PULL_TRAVEL_PX, PULL_TRAVEL_PX);
-  }
-
-  // Pause control on its own, for phases where the full control overlay is hidden.
-  renderPauseButton(ctx) {
-    const b = this.pauseBtn;
-    ctx.fillStyle = PAL.SLATE;
-    ctx.fillRect(b.x, b.y, b.w, b.h);
-    ctx.strokeStyle = PAL.CYAN;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(b.x, b.y, b.w, b.h);
-    ctx.fillStyle = PAL.WHITE;
-    ctx.font = '8px "Press Start 2P", monospace';
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("=", b.x + b.w / 2, b.y + b.h / 2);
-  }
-
   isInside(px, py, rect) {
     return px >= rect.x && px <= rect.x + rect.w && py >= rect.y && py <= rect.y + rect.h;
   }
@@ -403,12 +348,26 @@ export class InputController {
     );
   }
 
+  renderPauseButton(ctx) {
+    // Bottom-Left Menu / Pause Button
+    ctx.fillStyle = PAL.DARKEST;
+    ctx.fillRect(this.pauseBtn.x, this.pauseBtn.y, this.pauseBtn.w, this.pauseBtn.h);
+    ctx.strokeStyle = PAL.CYAN;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(this.pauseBtn.x, this.pauseBtn.y, this.pauseBtn.w, this.pauseBtn.h);
+    ctx.fillStyle = PAL.WHITE;
+    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("=", this.pauseBtn.x + this.pauseBtn.w / 2, this.pauseBtn.y + this.pauseBtn.h / 2);
+  }
+
   renderControls(ctx, matchState) {
     // 1. Fine Aim Buttons (◀ ▶)
     const drawBtn = (btn, text, held) => {
-      ctx.fillStyle = held ? PAL.GREY : PAL.SLATE;
+      ctx.fillStyle = held ? PAL.SLATE : PAL.DARKEST;
       ctx.fillRect(btn.x, btn.y, btn.w, btn.h);
-      ctx.strokeStyle = held ? PAL.CYAN : PAL.SILVER;
+      ctx.strokeStyle = held ? PAL.CYAN : PAL.SLATE;
       ctx.lineWidth = 1;
       ctx.strokeRect(btn.x, btn.y, btn.w, btn.h);
       ctx.fillStyle = PAL.WHITE;
@@ -421,17 +380,8 @@ export class InputController {
     drawBtn(this.fineLeftBtn, "<", this.fineLeftHeld);
     drawBtn(this.fineRightBtn, ">", this.fineRightHeld);
 
-    // 2. Pause Menu Button (☰)
-    ctx.fillStyle = PAL.SLATE;
-    ctx.fillRect(this.pauseBtn.x, this.pauseBtn.y, this.pauseBtn.w, this.pauseBtn.h);
-    ctx.strokeStyle = PAL.CYAN;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(this.pauseBtn.x, this.pauseBtn.y, this.pauseBtn.w, this.pauseBtn.h);
-    ctx.fillStyle = PAL.WHITE;
-    ctx.font = '8px "Press Start 2P", monospace';
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("=", this.pauseBtn.x + this.pauseBtn.w / 2, this.pauseBtn.y + this.pauseBtn.h / 2);
+    // 2. Pause / Menu Button (Moved to bottom-left next to fine aim)
+    this.renderPauseButton(ctx);
 
     // 3. Vibrant Power Bar with Neon segments & Power percentage readout
     const bar = this.powerBarRect;
@@ -461,7 +411,7 @@ export class InputController {
       if (isActive) {
         if (s <= 3) segColor = PAL.GREEN;        // Emerald Green (0..40%)
         else if (s <= 6) segColor = PAL.YELLOW;  // Gold (40..70%)
-        else if (s <= 8) segColor = PAL.ORANGE;  // Orange (70..90%)
+        else if (s <= 8) segColor = PAL.ORANGE || "#ff7700";  // Orange (70..90%)
         else segColor = PAL.RED;                 // Blazing Crimson (90..100%)
       }
 
@@ -470,9 +420,8 @@ export class InputController {
     }
 
     // Power percentage indicator below slider
-    const maxed = this.power >= CFG.MAX_POWER - 0.001;
-    ctx.fillStyle = maxed ? PAL.RED : PAL.CYAN;
-    ctx.fillText(maxed ? "MAX" : `${Math.round(this.power * 100)}%`, bar.x + bar.w / 2, bar.y + bar.h + 8);
+    ctx.fillStyle = PAL.CYAN;
+    ctx.fillText(`${Math.round(this.power * 100)}%`, bar.x + bar.w / 2, bar.y + bar.h + 8);
 
     // 4. Dedicated HIT / SHOOT Button
     const sb = this.shootBtn;
