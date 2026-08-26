@@ -386,31 +386,34 @@ export const matchScene = {
   renderHUD(ctx) {
     const save = loadSave();
 
-    // HUD Background
+    // HUD Background (Top 46 px)
     ctx.fillStyle = PAL.DARKEST;
     ctx.fillRect(0, 0, CFG.BASE_W, 46);
     ctx.strokeStyle = PAL.SLATE;
     ctx.lineWidth = 1;
     ctx.strokeRect(0, 0, CFG.BASE_W, 46);
 
-    // Player Block (Left)
+    // 1. Menu / Pause Button on Far Left of Top HUD (Zero overlap with text or table!)
+    this.input.renderPauseButton(ctx);
+
+    // 2. Player Block (Left, cleanly offset to x=38 so no overlap with Pause button)
     ctx.fillStyle = this.state.turn === "PLAYER" ? PAL.CYAN : PAL.WHITE;
     ctx.font = '8px "Press Start 2P", monospace';
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    ctx.fillText(save.displayName || "PLAYER", 8, 6);
+    ctx.fillText(save.displayName || "PLAYER", 38, 6);
 
     const pGroup = this.state.groups.PLAYER;
     if (pGroup) {
       const gBallId = pGroup === "SOLIDS" ? 1 : 9;
-      if (SPRITES.balls[gBallId]) ctx.drawImage(SPRITES.balls[gBallId][0], 8, 18);
+      if (SPRITES.balls[gBallId]) ctx.drawImage(SPRITES.balls[gBallId][0], 38, 18);
       ctx.fillStyle = PAL.SILVER;
-      ctx.fillText(`${pGroup}`, 22, 19);
+      ctx.fillText(`${pGroup}`, 52, 19);
 
       // Remaining balls dots
       const startBall = pGroup === "SOLIDS" ? 1 : 9;
       const endBall = pGroup === "SOLIDS" ? 7 : 15;
-      let dotX = 8;
+      let dotX = 38;
       for (let bId = startBall; bId <= endBall; bId++) {
         const bObj = this.state.balls[bId];
         const isPotted = !bObj || !bObj.inPlay;
@@ -428,12 +431,12 @@ export const matchScene = {
       ctx.strokeRect(dotX + 3, 32, 6, 6);
     } else {
       ctx.fillStyle = PAL.GREEN;
-      ctx.fillText("OPEN TABLE", 8, 20);
+      ctx.fillText("OPEN TABLE", 38, 20);
       ctx.fillStyle = PAL.SILVER;
-      ctx.fillText("ANY BALL (EXCEPT 8)", 8, 32);
+      ctx.fillText("ANY BALL (EXCEPT 8)", 38, 32);
     }
 
-    // AI Block (Right)
+    // 3. AI Block (Right)
     const aiDef = AI_PERSONALITIES.find((a) => a.tier === this.difficultyId) || AI_PERSONALITIES[0];
     const portrait = SPRITES.portraits[aiDef.name];
     if (portrait) {
@@ -466,7 +469,7 @@ export const matchScene = {
       ctx.fillText("OPEN", CFG.BASE_W - 26, 20);
     }
 
-    // Center: Turn Banner & Game Messages
+    // 4. Center: Turn Banner & Game Messages
     const msgX = Math.round(CFG.BASE_W / 2);
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
@@ -604,7 +607,7 @@ export const matchScene = {
       return;
     }
 
-    // Pause button always accessible
+    // Pause button always accessible (in top HUD bar)
     if (e.type === "pointerdown" && this.input.isInside(e.x, e.y, this.input.pauseBtn)) {
       this.pauseOpen = true;
       audio.playSfx("uiSelect");

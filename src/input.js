@@ -33,10 +33,12 @@ export class InputController {
     this.shootBtn = { x: 472, y: 198, w: 36, h: 24 };
     this.spinWidgetRect = { x: 472, y: 236, w: 36, h: 36 };
 
-    // Bottom-Left Utility Cluster (No overlap with top HUD!)
-    this.fineLeftBtn = { x: 8, y: 254, w: 22, h: 22 };
-    this.fineRightBtn = { x: 34, y: 254, w: 22, h: 22 };
-    this.pauseBtn = { x: 60, y: 254, w: 26, h: 22 };
+    // Fine aim buttons at bottom-left outside cushions
+    this.fineLeftBtn = { x: 8, y: 258, w: 20, h: 20 };
+    this.fineRightBtn = { x: 32, y: 258, w: 20, h: 20 };
+
+    // Pause / Menu button in Top HUD bar (y=0..46, zero overlap!)
+    this.pauseBtn = { x: 8, y: 11, w: 24, h: 24 };
   }
 
   resetSpin() {
@@ -91,7 +93,7 @@ export class InputController {
     const py = e.y;
 
     if (e.type === "pointerdown") {
-      // Check Pause / Menu button (always clickable)
+      // Check Pause / Menu button in Top HUD bar (always clickable)
       if (this.isInside(px, py, this.pauseBtn)) {
         if (typeof onPause === "function") onPause();
         return;
@@ -349,21 +351,21 @@ export class InputController {
   }
 
   renderPauseButton(ctx) {
-    // Bottom-Left Menu / Pause Button
+    // Menu / Pause Button inside Top HUD (x=8, y=11, w=24, h=24)
     ctx.fillStyle = PAL.DARKEST;
     ctx.fillRect(this.pauseBtn.x, this.pauseBtn.y, this.pauseBtn.w, this.pauseBtn.h);
     ctx.strokeStyle = PAL.CYAN;
     ctx.lineWidth = 1;
     ctx.strokeRect(this.pauseBtn.x, this.pauseBtn.y, this.pauseBtn.w, this.pauseBtn.h);
     ctx.fillStyle = PAL.WHITE;
-    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.font = '9px "Press Start 2P", monospace';
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("=", this.pauseBtn.x + this.pauseBtn.w / 2, this.pauseBtn.y + this.pauseBtn.h / 2);
   }
 
   renderControls(ctx, matchState) {
-    // 1. Fine Aim Buttons (◀ ▶)
+    // 1. Fine Aim Buttons (◀ ▶) at bottom-left
     const drawBtn = (btn, text, held) => {
       ctx.fillStyle = held ? PAL.SLATE : PAL.DARKEST;
       ctx.fillRect(btn.x, btn.y, btn.w, btn.h);
@@ -380,10 +382,7 @@ export class InputController {
     drawBtn(this.fineLeftBtn, "<", this.fineLeftHeld);
     drawBtn(this.fineRightBtn, ">", this.fineRightHeld);
 
-    // 2. Pause / Menu Button (Moved to bottom-left next to fine aim)
-    this.renderPauseButton(ctx);
-
-    // 3. Vibrant Power Bar with Neon segments & Power percentage readout
+    // 2. Vibrant Power Bar with Neon segments & Power percentage readout
     const bar = this.powerBarRect;
     ctx.fillStyle = PAL.DARKEST;
     ctx.fillRect(bar.x - 2, bar.y - 2, bar.w + 4, bar.h + 4);
@@ -409,10 +408,10 @@ export class InputController {
 
       let segColor = PAL.DARK;
       if (isActive) {
-        if (s <= 3) segColor = PAL.GREEN;        // Emerald Green (0..40%)
-        else if (s <= 6) segColor = PAL.YELLOW;  // Gold (40..70%)
-        else if (s <= 8) segColor = PAL.ORANGE || "#ff7700";  // Orange (70..90%)
-        else segColor = PAL.RED;                 // Blazing Crimson (90..100%)
+        if (s <= 3) segColor = PAL.GREEN;
+        else if (s <= 6) segColor = PAL.YELLOW;
+        else if (s <= 8) segColor = PAL.ORANGE || "#ff7700";
+        else segColor = PAL.RED;
       }
 
       ctx.fillStyle = segColor;
@@ -423,7 +422,7 @@ export class InputController {
     ctx.fillStyle = PAL.CYAN;
     ctx.fillText(`${Math.round(this.power * 100)}%`, bar.x + bar.w / 2, bar.y + bar.h + 8);
 
-    // 4. Dedicated HIT / SHOOT Button
+    // 3. Dedicated HIT / SHOOT Button
     const sb = this.shootBtn;
     ctx.fillStyle = this.isPullingBack ? PAL.RED : PAL.GREEN;
     ctx.fillRect(sb.x, sb.y, sb.w, sb.h);
@@ -436,7 +435,7 @@ export class InputController {
     ctx.textBaseline = "middle";
     ctx.fillText("HIT", sb.x + sb.w / 2, sb.y + sb.h / 2);
 
-    // 5. Spin Control Widget (34x34 cue ball disc)
+    // 4. Spin Control Widget (34x34 cue ball disc)
     const sw = this.spinWidgetRect;
     ctx.fillStyle = PAL.DARKEST;
     ctx.fillRect(sw.x, sw.y, sw.w, sw.h);
@@ -458,7 +457,7 @@ export class InputController {
     ctx.fillStyle = PAL.RED;
     ctx.fillRect(Math.round(markerX - 1.5), Math.round(markerY - 1.5), 3, 3);
 
-    // 6. Ball-in-Hand Ghost Placement Display
+    // 5. Ball-in-Hand Ghost Placement Display
     if (this.isPlacingBallInHand || matchState.phase === "BALL_IN_HAND" || matchState.phase === "PLACE_CUE_BREAK") {
       const gpx = physToPx(this.ballInHandPos.x, this.ballInHandPos.y);
       ctx.strokeStyle = this.ballInHandValid ? PAL.CYAN : PAL.RED;
