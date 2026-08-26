@@ -7,10 +7,28 @@ import { bakeFelt, bakeCueStick } from "../sprites.js";
 import { go } from "../sceneManager.js";
 import { audio } from "../audio.js";
 
+function wrapText(text, maxChars) {
+  if (!text) return [];
+  const words = text.split(" ");
+  const lines = [];
+  let cur = "";
+
+  words.forEach((w) => {
+    if ((cur + (cur ? " " : "") + w).length <= maxChars) {
+      cur += (cur ? " " : "") + w;
+    } else {
+      if (cur) lines.push(cur);
+      cur = w;
+    }
+  });
+  if (cur) lines.push(cur);
+  return lines;
+}
+
 export const settingsScene = {
   name: "settings",
   settings: null,
-  backBtn: { x: 12, y: 12, w: 60, h: 20 },
+  backBtn: { x: 12, y: 10, w: 60, h: 20 },
   cosmeticTab: "CUES", // 'CUES' | 'FELTS' | 'BACKGROUNDS'
   previewCueIdx: 0,
   previewFeltIdx: 0,
@@ -36,37 +54,37 @@ export const settingsScene = {
   update(dt) {},
 
   render(ctx) {
-    // Background
+    // Room Background
     renderRoomBackground(ctx, this.settings.selectedBg || "DEFAULT");
 
     // Dark tint plate
-    ctx.fillStyle = "rgba(10, 8, 20, 0.82)";
+    ctx.fillStyle = "rgba(10, 8, 20, 0.86)";
     ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
 
     // Top Header
     renderButton(ctx, this.backBtn, "< BACK", false);
 
     const isFs = !!document.fullscreenElement;
-    renderButton(ctx, { x: 400, y: 12, w: 100, h: 20 }, isFs ? "WINDOWED" : "FULLSCREEN", false);
+    renderButton(ctx, { x: 400, y: 10, w: 100, h: 20 }, isFs ? "WINDOWED" : "FULLSCREEN", false);
 
     ctx.fillStyle = PAL.WHITE;
     ctx.font = '8px "Press Start 2P", monospace';
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("SETTINGS & COSMETICS", 256, 22);
+    ctx.fillText("SETTINGS & COSMETICS", 256, 20);
 
     const s = this.settings;
     const save = loadSave();
 
-    // 1. Audio & Display Panel (Left: x=16, y=42, w=232, h=230)
-    renderPanel(ctx, 16, 42, 232, 230, "AUDIO & DISPLAY");
+    // 1. Audio & Display Panel (Left: x=16, y=40, w=232, h=234)
+    renderPanel(ctx, 16, 40, 232, 234, "AUDIO & DISPLAY");
 
-    const leftX = 26;
-    const leftBtnX = 170;
+    const leftX = 28;
+    const leftBtnX = 166;
 
     const drawSettingsRow = (label, valueText, y) => {
       ctx.fillStyle = PAL.WHITE;
-      ctx.font = '8px "Press Start 2P", monospace';
+      ctx.font = '7px "Press Start 2P", monospace';
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
       ctx.fillText(label, leftX, y);
@@ -75,51 +93,51 @@ export const settingsScene = {
       ctx.textAlign = "right";
       ctx.fillText(valueText, leftBtnX - 8, y);
 
-      renderButton(ctx, { x: leftBtnX, y: y - 8, w: 28, h: 16 }, "-", false);
-      renderButton(ctx, { x: leftBtnX + 32, y: y - 8, w: 28, h: 16 }, "+", false);
+      renderButton(ctx, { x: leftBtnX, y: y - 9, w: 26, h: 18 }, "-", false);
+      renderButton(ctx, { x: leftBtnX + 30, y: y - 9, w: 26, h: 18 }, "+", false);
     };
 
-    drawSettingsRow("MASTER", `${Math.round(s.masterVol * 100)}%`, 68);
-    drawSettingsRow("MUSIC", `${Math.round(s.musicVol * 100)}%`, 96);
-    drawSettingsRow("SFX", `${Math.round(s.sfxVol * 100)}%`, 124);
+    drawSettingsRow("MASTER", `${Math.round(s.masterVol * 100)}%`, 66);
+    drawSettingsRow("MUSIC", `${Math.round(s.musicVol * 100)}%`, 94);
+    drawSettingsRow("SFX", `${Math.round(s.sfxVol * 100)}%`, 122);
 
     // CRT Toggle Row
     ctx.fillStyle = PAL.WHITE;
-    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.font = '7px "Press Start 2P", monospace';
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText("CRT EFFECT", leftX, 154);
-    renderButton(ctx, { x: 154, y: 145, w: 74, h: 18 }, s.crtEnabled ? "ON" : "OFF", s.crtEnabled);
+    ctx.fillText("CRT EFFECT", leftX, 152);
+    renderButton(ctx, { x: 154, y: 142, w: 68, h: 20 }, s.crtEnabled ? "ON" : "OFF", s.crtEnabled);
 
     // Aim Assist Toggle Row
     ctx.fillStyle = PAL.WHITE;
-    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.font = '7px "Press Start 2P", monospace';
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText("AIM ASSIST", leftX, 184);
-    renderButton(ctx, { x: 144, y: 175, w: 84, h: 18 }, s.assistLevel, false);
+    ctx.fillText("AIM ASSIST", leftX, 182);
+    renderButton(ctx, { x: 144, y: 172, w: 78, h: 20 }, s.assistLevel, false);
 
     // Reset Progress Button
-    renderButton(ctx, { x: 26, y: 232, w: 212, h: 24 }, "RESET PROGRESS", false);
+    renderButton(ctx, { x: 26, y: 234, w: 212, h: 24 }, "RESET PROGRESS", false);
 
-    // 2. Cosmetics Panel with Tabs (Right: x=264, y=42, w=232, h=230)
-    renderPanel(ctx, 264, 42, 232, 230, "PRO SHOP");
+    // 2. Pro Shop Panel (Right: x=264, y=40, w=232, h=234)
+    renderPanel(ctx, 264, 40, 232, 234, "PRO SHOP");
 
     // Coins header
     ctx.fillStyle = PAL.YELLOW;
-    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.font = '7px "Press Start 2P", monospace';
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
-    ctx.fillText(`COINS: ${save.coins || 0}`, 484, 62);
+    ctx.fillText(`COINS: ${save.coins || 0}`, 484, 56);
 
-    // Category Tabs: [CUES] [FELTS] [ROOM BG]
+    // Category Tabs: [CUES] [FELTS] [ROOMS]
     const tabW = 68;
     const tabH = 18;
-    const tabY = 74;
+    const tabY = 68;
 
     renderButton(ctx, { x: 274, y: tabY, w: tabW, h: tabH }, "CUES", this.cosmeticTab === "CUES");
     renderButton(ctx, { x: 346, y: tabY, w: tabW, h: tabH }, "FELTS", this.cosmeticTab === "FELTS");
-    renderButton(ctx, { x: 418, y: tabY, w: tabW + 6, h: tabH }, "ROOMS", this.cosmeticTab === "BACKGROUNDS");
+    renderButton(ctx, { x: 418, y: tabY, w: tabW, h: tabH }, "ROOMS", this.cosmeticTab === "BACKGROUNDS");
 
     // Active Item Display Card
     let curList = COSMETIC_CUES;
@@ -148,35 +166,39 @@ export const settingsScene = {
     ctx.font = '8px "Press Start 2P", monospace';
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(item.name, 380, 108);
+    ctx.fillText(item.name, 380, 102);
 
     // Item Cost / Status
     if (isEquipped) {
       ctx.fillStyle = PAL.GREEN;
-      ctx.fillText("[ EQUIPPED ]", 380, 126);
+      ctx.font = '7px "Press Start 2P", monospace';
+      ctx.fillText("[ EQUIPPED ]", 380, 118);
     } else if (isUnlocked) {
       ctx.fillStyle = PAL.CYAN;
-      ctx.fillText("[ OWNED ]", 380, 126);
+      ctx.font = '7px "Press Start 2P", monospace';
+      ctx.fillText("[ OWNED ]", 380, 118);
     } else {
       ctx.fillStyle = PAL.YELLOW;
-      ctx.fillText(`COST: ${item.cost} COINS`, 380, 126);
+      ctx.font = '7px "Press Start 2P", monospace';
+      ctx.fillText(`COST: ${item.cost} COINS`, 380, 118);
     }
 
-    // Item Description (2-line wrap)
+    // Item Description (Wrapped with clean 6px font)
     ctx.fillStyle = PAL.SILVER;
-    ctx.font = '8px "Press Start 2P", monospace';
-    ctx.textAlign = "center";
-    ctx.fillText(item.desc || (item.name + " theme"), 380, 150);
+    ctx.font = '6px "Press Start 2P", monospace';
+    const descLines = wrapText(item.desc || (item.name + " theme"), 30);
+    if (descLines[0]) ctx.fillText(descLines[0], 380, 136);
+    if (descLines[1]) ctx.fillText(descLines[1], 380, 148);
 
     // Navigation Controls (< PREV | NEXT >)
-    renderButton(ctx, { x: 274, y: 174, w: 90, h: 22 }, "< PREV", false);
-    renderButton(ctx, { x: 394, y: 174, w: 90, h: 22 }, "NEXT >", false);
+    renderButton(ctx, { x: 274, y: 166, w: 96, h: 22 }, "< PREV", false);
+    renderButton(ctx, { x: 390, y: 166, w: 96, h: 22 }, "NEXT >", false);
 
-    // Main Action Button (BUY / EQUIP / EQUIPPED)
-    const actionBtnRect = { x: 274, y: 204, w: 210, h: 26 };
+    // Main Action Button (BUY / EQUIP / ACTIVE)
+    const actionBtnRect = { x: 274, y: 198, w: 212, h: 26 };
     if (!isUnlocked) {
       const canAfford = (save.coins || 0) >= item.cost;
-      renderButton(ctx, actionBtnRect, canAfford ? `BUY (${item.cost} C)` : "NEED MORE COINS", false);
+      renderButton(ctx, actionBtnRect, canAfford ? `BUY ITEM (${item.cost} C)` : "NEED MORE COINS", false);
     } else if (!isEquipped) {
       renderButton(ctx, actionBtnRect, "EQUIP ITEM", false);
     } else {
@@ -184,7 +206,7 @@ export const settingsScene = {
       ctx.font = '8px "Press Start 2P", monospace';
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("[ CURRENTLY ACTIVE ]", 380, 217);
+      ctx.fillText("[ CURRENTLY ACTIVE ]", 380, 211);
     }
 
     // 3. Reset Confirmation Modal
@@ -231,7 +253,7 @@ export const settingsScene = {
     if (e.type !== "pointerdown") return;
 
     // Back Button
-    if (e.x >= 12 && e.x <= 72 && e.y >= 12 && e.y <= 32) {
+    if (e.x >= 12 && e.x <= 72 && e.y >= 10 && e.y <= 30) {
       audio.playSfx("uiSelect");
       saveSettings(this.settings);
       go("title");
@@ -239,7 +261,7 @@ export const settingsScene = {
     }
 
     // Fullscreen Toggle
-    if (e.x >= 400 && e.x <= 500 && e.y >= 12 && e.y <= 32) {
+    if (e.x >= 400 && e.x <= 500 && e.y >= 10 && e.y <= 30) {
       audio.playSfx("uiSelect");
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().catch(() => {});
@@ -274,50 +296,50 @@ export const settingsScene = {
     const s = this.settings;
     const save = loadSave();
 
-    // Volume Sliders
-    if (e.y >= 60 && e.y <= 76) {
-      if (e.x >= 170 && e.x <= 198) {
+    // Volume Sliders (leftBtnX = 166, width = 26, + at x = 196)
+    if (e.y >= 56 && e.y <= 76) {
+      if (e.x >= 166 && e.x <= 192) {
         s.masterVol = Math.max(0, parseFloat((s.masterVol - 0.1).toFixed(1)));
         audio.setMasterVolume(s.masterVol);
         audio.playSfx("uiMove");
-      } else if (e.x >= 202 && e.x <= 230) {
+      } else if (e.x >= 196 && e.x <= 222) {
         s.masterVol = Math.min(1.0, parseFloat((s.masterVol + 0.1).toFixed(1)));
         audio.setMasterVolume(s.masterVol);
         audio.playSfx("uiMove");
       }
     }
-    if (e.y >= 88 && e.y <= 104) {
-      if (e.x >= 170 && e.x <= 198) {
+    if (e.y >= 84 && e.y <= 104) {
+      if (e.x >= 166 && e.x <= 192) {
         s.musicVol = Math.max(0, parseFloat((s.musicVol - 0.1).toFixed(1)));
         audio.setMusicVolume(s.musicVol);
         audio.playSfx("uiMove");
-      } else if (e.x >= 202 && e.x <= 230) {
+      } else if (e.x >= 196 && e.x <= 222) {
         s.musicVol = Math.min(1.0, parseFloat((s.musicVol + 0.1).toFixed(1)));
         audio.setMusicVolume(s.musicVol);
         audio.playSfx("uiMove");
       }
     }
-    if (e.y >= 116 && e.y <= 132) {
-      if (e.x >= 170 && e.x <= 198) {
+    if (e.y >= 112 && e.y <= 132) {
+      if (e.x >= 166 && e.x <= 192) {
         s.sfxVol = Math.max(0, parseFloat((s.sfxVol - 0.1).toFixed(1)));
         audio.setSfxVolume(s.sfxVol);
         audio.playSfx("ballHit");
-      } else if (e.x >= 202 && e.x <= 230) {
+      } else if (e.x >= 196 && e.x <= 222) {
         s.sfxVol = Math.min(1.0, parseFloat((s.sfxVol + 0.1).toFixed(1)));
         audio.setSfxVolume(s.sfxVol);
         audio.playSfx("ballHit");
       }
     }
 
-    // CRT Toggle
-    if (e.x >= 154 && e.x <= 228 && e.y >= 145 && e.y <= 163) {
+    // CRT Toggle (x=154, y=142, w=68, h=20)
+    if (e.x >= 154 && e.x <= 222 && e.y >= 142 && e.y <= 162) {
       s.crtEnabled = !s.crtEnabled;
       audio.playSfx("uiSelect");
       return;
     }
 
-    // Aim Assist Toggle
-    if (e.x >= 144 && e.x <= 228 && e.y >= 175 && e.y <= 193) {
+    // Aim Assist Toggle (x=144, y=172, w=78, h=20)
+    if (e.x >= 144 && e.x <= 222 && e.y >= 172 && e.y <= 192) {
       const levels = ["FULL", "HALF", "CUE_ONLY", "OFF"];
       const nextIdx = (levels.indexOf(s.assistLevel) + 1) % levels.length;
       s.assistLevel = levels[nextIdx];
@@ -325,17 +347,17 @@ export const settingsScene = {
       return;
     }
 
-    // Reset Progress Button
-    if (e.x >= 26 && e.x <= 238 && e.y >= 232 && e.y <= 256) {
+    // Reset Progress Button (x=26, y=234, w=212, h=24)
+    if (e.x >= 26 && e.x <= 238 && e.y >= 234 && e.y <= 258) {
       audio.playSfx("uiSelect");
       this.resetConfirmOpen = true;
       this.resetInput = "";
       return;
     }
 
-    // Tab Switches
-    const tabY = 74;
-    if (e.y >= tabY && e.y <= tabY + 18) {
+    // Tab Switches (y = 68..86)
+    const tabY = 68;
+    if (e.y >= tabY && e.y <= tabY + 20) {
       if (e.x >= 274 && e.x <= 342) {
         this.cosmeticTab = "CUES";
         audio.playSfx("uiSelect");
@@ -344,7 +366,7 @@ export const settingsScene = {
         this.cosmeticTab = "FELTS";
         audio.playSfx("uiSelect");
         return;
-      } else if (e.x >= 418 && e.x <= 492) {
+      } else if (e.x >= 418 && e.x <= 488) {
         this.cosmeticTab = "BACKGROUNDS";
         audio.playSfx("uiSelect");
         return;
@@ -366,22 +388,22 @@ export const settingsScene = {
       unlockKey = "backgrounds";
     }
 
-    // Prev Button (x=274, y=174, w=90, h=22)
-    if (e.x >= 274 && e.x <= 364 && e.y >= 174 && e.y <= 196) {
+    // Prev Button (x=274, y=166, w=96, h=22)
+    if (e.x >= 274 && e.x <= 370 && e.y >= 166 && e.y <= 188) {
       this[propIdxName] = (this[propIdxName] - 1 + curList.length) % curList.length;
       audio.playSfx("uiMove");
       return;
     }
 
-    // Next Button (x=394, y=174, w=90, h=22)
-    if (e.x >= 394 && e.x <= 484 && e.y >= 174 && e.y <= 196) {
+    // Next Button (x=390, y=166, w=96, h=22)
+    if (e.x >= 390 && e.x <= 486 && e.y >= 166 && e.y <= 188) {
       this[propIdxName] = (this[propIdxName] + 1) % curList.length;
       audio.playSfx("uiMove");
       return;
     }
 
-    // Action Button (x=274, y=204, w=210, h=26)
-    if (e.x >= 274 && e.x <= 484 && e.y >= 204 && e.y <= 230) {
+    // Action Button (x=274, y=198, w=212, h=26)
+    if (e.x >= 274 && e.x <= 486 && e.y >= 198 && e.y <= 224) {
       const curItem = curList[this[propIdxName]];
       const isUnlocked = save.unlocks[unlockKey] && save.unlocks[unlockKey].includes(curItem.id);
 
