@@ -1,0 +1,62 @@
+# FMS POOL — Complete Technical & Architectural Specification
+
+## Overview
+FMS POOL is a zero-build retro pixel-art 8-ball billiards game designed to run natively in any modern web browser. It features a custom deterministic 2D physics engine, an intelligent lookahead AI opponent, single-elimination tournament mode, persistent state restoration, and a global leaderboard backed by Firebase Realtime Database.
+
+- Website: https://fmspool.vercel.app/
+- Repository: https://github.com/abhy-kumar/fmspool
+- Author: abhy-kumar <abhiks177@gmail.com>
+
+---
+
+## 1. Technical Architecture & Constraints
+- **Language**: Pure Plain JavaScript (ES2020) using native ES Modules (`<script type="module">`, `import`/`export`).
+- **Build Pipeline**: 0 build tools. No Webpack, Vite, Rollup, Babel, or npm dependencies.
+- **Rendering**: Single HTML5 `<canvas>` element rendered via 2D Context at 512x288 internal resolution, scaled via integer pixel ratios with automatic 90-degree rotation support on mobile portrait viewports.
+- **Assets**: 0 binary images (PNG/JPG) and 0 binary audio files (MP3/WAV). All 16 balls x 4 roll frames, 2x2 Bayer dithered felt, cue stick, 7 AI portraits (16x16), and 6 tier badges are procedurally baked onto offscreen canvas caches at startup.
+- **Audio**: Procedural Web Audio API sound synthesis utilizing custom Fourier-series pulse waves (25% and 50% duty cycles), triangle wave bass, and filtered white-noise buffers for drums and dynamic velocity-scaled impact sound effects.
+
+---
+
+## 2. Physics & Ball Mechanics
+- Timestep: Fixed dt = 1/240 seconds (240Hz) with maximum 12 substeps per animation frame.
+- Friction: Linear rolling friction decelerating balls at 260 units/s^2, snapping to 0 below 6 units/s.
+- Cushion Restitution: 0.75 normal restitution, 0.85 tangential damping, with side-spin deflection.
+- Ball Collisions: Elastic impulse resolution (restitution = 0.94) with 0.02 separation slop to prevent overlap.
+- Spin Transfer: Topspin/backspin follow/draw transferred along contact normal on first object-ball contact.
+- Invariant: MAX_SPEED * DT (7.916) < BALL_R (9.0) guaranteed to eliminate tunneling.
+
+---
+
+## 3. Rules Engine (WPA 8-Ball Standard)
+- State Machine Phases: PLACE_CUE_BREAK, AIMING, SHOT_RESOLVING, BALL_IN_HAND, CALL_POCKET, GAME_OVER.
+- Break Shot: Cue ball behind head string (x < 200). Requires >= 1 pocketed or >= 4 balls touching cushions. 8-ball on break triggers re-rack and re-break.
+- Fouls: Cue scratch, no ball contact, wrong group first contact, no rail/pocket after contact, ball off table, shot clock expiration (30s). Foul awards opponent ball-in-hand anywhere on table.
+- Group Assignment: Table remains open until a player legally pockets a ball on a non-foul shot.
+- 8-Ball Resolution: Pocketing 8-ball into called pocket after clearing group = WIN. Pocketing 8-ball early, into wrong pocket, or on scratch = IMMEDIATE LOSS.
+
+---
+
+## 4. Intelligent Pool AI Engine
+- Candidate Generation: Identifies legal targets, computes ghost-ball positions, rejects cuts > 78 degrees, checks path clearance margins via segment-to-circle tests, and ranks via heuristic priors.
+- Physics Lookahead Simulation: Clones game state and simulates candidate shots at 120Hz up to 900 steps.
+- Search Evaluation: Scores potted balls (+1000 own, -260 opponent, +100000 win, -100000 illegal 8), penalizes fouls (-900), evaluates next-shot quality, and incorporates opponent reply penalties for Pro/Legend difficulties.
+- Safety Play: When best pot score is low (< 250), generates defensive grazing shots to snooker the player.
+- Calibrated Error Injection: Injects Gaussian angular and power jitter scaled to difficulty tier.
+
+---
+
+## 5. Scoring & Bayesian Rating
+- 6 Normalized Metrics: Victory (0.30), Dominance (0.15), Precision (0.20), Discipline (0.10), Flair (0.15), Tempo (0.10).
+- Match Score: 1000 * S * DifficultyMult * ModeMult.
+- Tournament Run Score: Sum of match scores + 150 * roundsAdvanced + Title Bonus (Bronze 500, Silver 900, Gold 1500, Champion 2400).
+- Bayesian Player Rating: conf = n / (n + 3); rating = round(rawTop5Mean * conf + 400 * (1 - conf)).
+- Competitive Tiers: Bronze (0-499), Silver (500-799), Gold (800-1099), Platinum (1100-1399), Diamond (1400-1699), Master (1700+).
+
+---
+
+## 6. Safe Data Sync & Firebase Integration
+- Write-Once Runs: `/v1/runs/${playerId}/${runId}` secured with `!data.exists()` and FNV-1a checksums.
+- Atomic Player Transactions: `/v1/players/${playerId}` updated via `runTransaction` with idempotency guards.
+- Field-by-Field Merge: Last-Write-Wins by timestamp for display name, MIN for timestamps, MAX (never SUM) for career counters to prevent double-counting across devices, and UNION for run IDs.
+- Offline Outbox: Queues cloud updates locally in localStorage and retries with exponential backoff schedule [2s, 6s, 15s, 45s, 120s].

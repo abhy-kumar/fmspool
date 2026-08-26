@@ -1,19 +1,99 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#0d0b12">
-  <title>FMS POOL - Retro Pixel 8-Ball</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  
+  <!-- Primary SEO Meta Tags -->
+  <title>FMS POOL — Retro Pixel 8-Ball Pool | Play Online vs AI & Global Leaderboard</title>
+  <meta name="title" content="FMS POOL — Retro Pixel 8-Ball Pool | Play Online vs AI & Global Leaderboard" />
+  <meta name="description" content="Play FMS POOL, the ultimate browser-based retro pixel-art 8-ball billiards game. Experience authentic 2D physics, intelligent AI opponents, single-elimination tournament cups, and real-time global rankings. 100% free with zero downloads." />
+  <meta name="keywords" content="8-ball pool, retro pool game, pixel art billiards, 8 ball pool online, browser pool game, pool AI, pixel 8 ball, arcade billiards, free pool game, web billiards, pool tournament online, FMS POOL" />
+  <meta name="author" content="abhy-kumar" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+  <link rel="canonical" href="https://fmspool.vercel.app/" />
+
+  <!-- PWA & Mobile Icons -->
+  <meta name="theme-color" content="#0d0b12" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="FMS POOL" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  <link rel="apple-touch-icon" href="./favicon.svg" />
+
+  <!-- OpenGraph / Facebook Meta Tags -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://fmspool.vercel.app/" />
+  <meta property="og:title" content="FMS POOL — Retro Pixel 8-Ball Pool Game" />
+  <meta property="og:description" content="Play retro pixel 8-ball pool online against smart AI opponents or climb the global leaderboard. Featuring 240Hz physics, tournament cups, and procedural chiptunes." />
+  <meta property="og:image" content="https://fmspool.vercel.app/favicon.svg" />
+  <meta property="og:site_name" content="FMS POOL" />
+  <meta property="og:locale" content="en_US" />
+
+  <!-- Twitter Card Meta Tags -->
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:url" content="https://fmspool.vercel.app/" />
+  <meta name="twitter:title" content="FMS POOL — Retro Pixel 8-Ball Pool" />
+  <meta name="twitter:description" content="Play retro pixel 8-ball pool online against smart AI opponents or climb the global leaderboard. Featuring 240Hz physics, tournament cups, and procedural chiptunes." />
+  <meta name="twitter:image" content="https://fmspool.vercel.app/favicon.svg" />
+  <meta name="twitter:creator" content="@abhiks177" />
+
+  <!-- Schema.org Structured Data (JSON-LD) for VideoGame -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "VideoGame",
+    "name": "FMS POOL",
+    "url": "https://fmspool.vercel.app/",
+    "description": "Retro pixel-art 8-ball billiards game featuring deterministic 2D physics, lookahead AI opponents, single-elimination tournament cups, and real-time global leaderboards.",
+    "genre": ["Sports Game", "Arcade Game", "Billiards", "8-Ball Pool", "Retro Game"],
+    "gamePlatform": ["Web Browser", "Desktop Browser", "Mobile Browser"],
+    "applicationCategory": "Game",
+    "operatingSystem": "Any modern web browser with HTML5 Canvas and Web Audio support",
+    "inLanguage": "en",
+    "playMode": "SinglePlayer",
+    "author": {
+      "@type": "Person",
+      "name": "abhy-kumar",
+      "email": "abhiks177@gmail.com",
+      "url": "https://github.com/abhy-kumar"
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD",
+      "category": "FreeToPlay"
+    }
+  }
+  </script>
+
+  <!-- Typography: Press Start 2P -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <div id="game-container">
-    <canvas id="game-canvas" width="512" height="288"></canvas>
-  </div>
+  <main id="game-container">
+    <canvas 
+      id="game-canvas" 
+      width="512" 
+      height="288"
+      role="application"
+      aria-label="FMS POOL interactive 8-ball billiards retro pixel game"
+      tabindex="0"
+    >
+      <div id="canvas-fallback" style="padding: 20px; color: #fff; font-family: monospace;">
+        <h1>FMS POOL — Retro Pixel 8-Ball Billiards</h1>
+        <p>Your browser does not support HTML5 Canvas. Please update your browser to play FMS POOL online.</p>
+        <p>Features include Player vs AI 8-ball matches, tournament cups, 240Hz physics, and real-time Firebase leaderboards.</p>
+      </div>
+    </canvas>
+  </main>
+
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>

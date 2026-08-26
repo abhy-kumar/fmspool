@@ -1,0 +1,22 @@
+# FMS POOL
+
+> FMS POOL is a zero-build, browser-based retro pixel-art 8-ball billiards game built with plain ES2020 JavaScript, custom 2D deterministic physics, lookahead AI opponents, single-elimination tournament cups, and a Firebase Realtime Database global leaderboard.
+
+- **Live URL**: https://fmspool.vercel.app/
+- **Repository**: https://github.com/abhy-kumar/fmspool
+- **Developer**: abhy-kumar (abhiks177@gmail.com)
+- **Tech Stack**: Plain JavaScript (ES2020), HTML5 Canvas 2D, Web Audio API, Firebase Realtime Database
+- **Build System**: None (Native ES Modules, Zero npm / bundler dependencies)
+
+## Core Capabilities & Features
+- **Deterministic 2D Physics Engine**: 240Hz fixed-timestep integration with rolling friction, ball-ball elastic collisions, spin follow/draw and side deflection, and pocket capture mechanics.
+- **Intelligent AI Opponent**: 4 difficulty tiers (Rookie, Amateur, Pro, Legend) with trajectory ray-casting, ghost ball calculation, lookahead physics simulation, time budgeting (220ms hard cap), safety plays, and 7 procedural pixel personalities.
+- **Tournament Mode**: 4 Cups (Bronze, Silver, Gold, Champion) featuring 8-player single-elimination brackets with instant AI-vs-AI weighted coin-flip resolutions and coin payouts.
+- **6-Component Scoring**: Victory (30%), Dominance (15%), Precision (20%), Discipline (10%), Flair (15%), Tempo (10%) with Bayesian-shrunk player rating formula ($conf = n/(n+3)$) and 6 competitive tiers (Bronze to Master).
+- **Zero Binary Assets**: 100% of sprites (16 balls x 4 roll frames, Bayer dithered felt, cue sticks, portraits, badges) and audio (5 algorithmic 8-bit tracks, 10 dynamic SFX) are generated procedurally at boot.
+- **Non-Destructive Persistence**: LocalStorage with `.bak` redundancy, mid-match snapshotting, and offline-first outbox syncing with atomic transactions and MAX-not-SUM counter convergence.
+
+## API & Documentation Links
+- [Complete Architecture & Implementation Spec](https://github.com/abhy-kumar/fmspool/blob/main/README.md)
+- [Firebase Security Rules](https://github.com/abhy-kumar/fmspool/blob/main/firebase.rules.json)
+- [Full LLMs Documentation](https://fmspool.vercel.app/llms-full.txt)

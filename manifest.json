@@ -1,0 +1,19 @@
+{
+  "name": "FMS POOL - Retro Pixel 8-Ball",
+  "short_name": "FMS POOL",
+  "description": "Retro pixel-art 8-ball pool game featuring custom 2D physics, challenging AI opponents, tournaments, and real-time global leaderboards.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d0b12",
+  "theme_color": "#0d0b12",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["games", "sports", "arcade"]
+}
