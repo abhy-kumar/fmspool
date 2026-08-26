@@ -1,16 +1,29 @@
 const IDENTITY_KEY = "fmspool.identity.v1";
 
+export function generateUUID() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    try {
+      return crypto.randomUUID();
+    } catch (_) {}
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 export function getOrCreatePlayerId() {
   let pid = null;
   try {
     pid = localStorage.getItem(IDENTITY_KEY);
     if (!pid) {
-      pid = crypto.randomUUID();
+      pid = generateUUID();
       localStorage.setItem(IDENTITY_KEY, pid);
     }
   } catch (e) {
     console.warn("[Identity] localStorage error, generating fallback UUID", e);
-    pid = crypto.randomUUID();
+    pid = generateUUID();
   }
   return pid;
 }

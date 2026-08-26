@@ -6,7 +6,7 @@ import { loadSave } from "../storage.js";
 import { formatWithDiscriminator } from "../identity.js";
 import { renderPanel, renderButton } from "../ui.js";
 import { renderCRTEffect } from "../render.js";
-import { go } from "../main.js";
+import { go } from "../sceneManager.js";
 import { audio } from "../audio.js";
 
 const TABS = [

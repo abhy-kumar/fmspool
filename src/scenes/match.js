@@ -11,7 +11,7 @@ import { loadSave, saveMatchSnapshot, clearMatchSnapshot, saveImmediate, loadSet
 import { submitRun, checkQualifiesTop10 } from "../cloud.js";
 import { renderPanel, renderButton, ArcadeKeyboard } from "../ui.js";
 import { makeRng } from "../rng.js";
-import { go } from "../main.js";
+import { go } from "../sceneManager.js";
 import { audio } from "../audio.js";
 import { fromAngle, mul, dist, clamp, lerpAngle } from "../vec.js";
 import { POCKETS } from "../table.js";

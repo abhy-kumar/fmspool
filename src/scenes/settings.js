@@ -5,7 +5,7 @@ import { COSMETIC_CUES, COSMETIC_FELTS } from "../tournament.js";
 import { bakeFelt, bakeCueStick } from "../sprites.js";
 import { renderPanel, renderButton } from "../ui.js";
 import { renderCRTEffect } from "../render.js";
-import { go } from "../main.js";
+import { go } from "../sceneManager.js";
 import { audio } from "../audio.js";
 import { clamp } from "../vec.js";
 

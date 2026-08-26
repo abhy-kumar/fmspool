@@ -1,4 +1,5 @@
 import { CFG } from "./config.js";
+import { sceneManager, go } from "./sceneManager.js";
 import { bootScene } from "./scenes/boot.js";
 import { titleScene } from "./scenes/title.js";
 import { matchScene } from "./scenes/match.js";
@@ -23,47 +24,15 @@ export const view = {
   height: CFG.BASE_H,
 };
 
-// Scene Registry
-const scenes = {
-  boot: bootScene,
-  title: titleScene,
-  match: matchScene,
-  tournament: tournamentScene,
-  leaderboard: leaderboardScene,
-  settings: settingsScene,
-};
+// Register all scenes into the decoupled sceneManager
+sceneManager.register("boot", bootScene);
+sceneManager.register("title", titleScene);
+sceneManager.register("match", matchScene);
+sceneManager.register("tournament", tournamentScene);
+sceneManager.register("leaderboard", leaderboardScene);
+sceneManager.register("settings", settingsScene);
 
-export const sceneManager = {
-  current: null,
-  next: null,
-  register(name, sceneObj) {
-    scenes[name] = sceneObj;
-  },
-  go(name, params) {
-    this.next = { name, params };
-  },
-  updateSceneTransition() {
-    if (this.next) {
-      if (this.current && typeof this.current.exit === "function") {
-        this.current.exit();
-      }
-      const nextScene = scenes[this.next.name];
-      if (nextScene) {
-        this.current = nextScene;
-        if (typeof this.current.enter === "function") {
-          this.current.enter(this.next.params);
-        }
-      } else {
-        console.error(`Scene not found: ${this.next.name}`);
-      }
-      this.next = null;
-    }
-  },
-};
-
-export function go(name, params) {
-  sceneManager.go(name, params);
-}
+export { go };
 
 // Window resize & viewport scaling
 function updateViewport() {

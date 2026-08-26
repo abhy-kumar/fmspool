@@ -7,7 +7,7 @@ import { formatWithDiscriminator } from "../identity.js";
 import { getIsOffline } from "../cloud.js";
 import { renderButton, renderPanel } from "../ui.js";
 import { renderCRTEffect } from "../render.js";
-import { go } from "../main.js";
+import { go } from "../sceneManager.js";
 import { audio } from "../audio.js";
 
 export const titleScene = {
@@ -185,7 +185,6 @@ export const titleScene = {
   },
 
   renderDifficultyModal(ctx) {
-    // Backdrop
     ctx.fillStyle = "rgba(5, 4, 9, 0.85)";
     ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
 
