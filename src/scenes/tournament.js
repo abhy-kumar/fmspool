@@ -123,7 +123,6 @@ export const tournamentScene = {
 
       ctx.fillStyle = PAL.SILVER;
       ctx.fillText(`FEE: ${cup.entryFee} C`, cx + cardW / 2, cy + 96);
-      ctx.fillText(`RACE: ${cup.raceTo.join("/")}`, cx + cardW / 2, cy + 114);
 
       // Button
       if (!isUnlocked) {
@@ -162,6 +161,8 @@ export const tournamentScene = {
     const boxW = 86;
     const boxH = 20;
     const qfGap = 8;
+    const sfStartX = 146;
+    const fStartX = 272;
 
     for (let m = 0; m < 4; m++) {
       const match = qf[m];
@@ -182,7 +183,6 @@ export const tournamentScene = {
     }
 
     // Draw SF Column
-    const sfStartX = 146;
     for (let m = 0; m < 2; m++) {
       const match = sf[m];
       const my = qfStartY + 14 + m * (boxH * 2 + 56);
@@ -199,7 +199,6 @@ export const tournamentScene = {
     }
 
     // Draw Final Column
-    const fStartX = 272;
     const fy = qfStartY + 42;
     const fMatch = finals[0];
     this.drawBracketSlot(ctx, fStartX, fy, boxW, boxH, fMatch.p1, fMatch.winner && fMatch.winner === fMatch.p1);

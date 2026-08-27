@@ -64,7 +64,7 @@ export function createTournamentBracket(cupId, playerName, seed = Date.now()) {
   // 8 seeds
   const seeds = [
     { id: "PLAYER", name: playerName || "PLAYER", isPlayer: true, tier: "PLAYER" },
-    ...shuffledAIs.map((ai) => ({ id: ai.name, name: ai.name, isPlayer: false, tier: ai.tier })),
+    ...shuffledAIs.slice(0, 7).map((ai) => ({ id: ai.name, name: ai.name, isPlayer: false, tier: ai.tier })),
   ];
 
   // Quarterfinals (4 matches)
