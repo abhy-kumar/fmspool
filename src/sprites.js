@@ -39,8 +39,8 @@ function createOffscreen(w, h) {
   return { canvas: c, ctx };
 }
 
-// Generate 32-bit shaded 3D billiard spheres
-export function bakeBallSprites() {
+// Generate 32-bit shaded 3D billiard spheres with custom Ball Skins
+export function bakeBallSprites(ballSkin = "DEFAULT") {
   SPRITES.balls = [];
   const size = 12; // 12x12 high-detail sphere
   const radius = 5.2;
@@ -53,31 +53,104 @@ export function bakeBallSprites() {
 
     for (let frame = 0; frame < 4; frame++) {
       const { canvas, ctx } = createOffscreen(size, size);
-      const rollAngle = (frame * Math.PI) / 2;
-
-      // 1. Base Sphere Gradient (Spherical lighting from top-left)
-      const grad = ctx.createRadialGradient(cx - 1.8, cy - 1.8, 0.5, cx, cy, radius);
-      if (id === 0) {
-        // Pure cue ball
-        grad.addColorStop(0, "#ffffff");
-        grad.addColorStop(0.65, "#f0f2fa");
-        grad.addColorStop(1, "#c0c8db");
-      } else if (id === 8) {
-        // 8-ball (obsidian gloss)
-        grad.addColorStop(0, "#3c384a");
-        grad.addColorStop(0.5, "#171421");
-        grad.addColorStop(1, "#08060d");
-      } else {
-        // Colored balls
-        grad.addColorStop(0, ballDef.base);
-        grad.addColorStop(0.7, ballDef.dark);
-        grad.addColorStop(1, "#0a0712");
-      }
 
       ctx.save();
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
       ctx.clip();
+
+      // 1. Base Sphere Material Shading
+      const grad = ctx.createRadialGradient(cx - 1.8, cy - 1.8, 0.5, cx, cy, radius);
+
+      if (ballSkin === "NEON") {
+        // CYBER GLOW: High-saturation luminescent neon
+        if (id === 0) {
+          grad.addColorStop(0, "#ffffff");
+          grad.addColorStop(0.5, "#a6f8ff");
+          grad.addColorStop(1, "#00c8ff");
+        } else if (id === 8) {
+          grad.addColorStop(0, "#4a3b63");
+          grad.addColorStop(0.6, "#1f1035");
+          grad.addColorStop(1, "#0a0414");
+        } else {
+          grad.addColorStop(0, "#ffffff");
+          grad.addColorStop(0.3, ballDef.base);
+          grad.addColorStop(0.8, ballDef.dark);
+          grad.addColorStop(1, "#0a001a");
+        }
+      } else if (ballSkin === "VINTAGE") {
+        // ANTIQUE IVORY: Warm aged sepia patina
+        if (id === 0) {
+          grad.addColorStop(0, "#fffcf0");
+          grad.addColorStop(0.6, "#ebd9b0");
+          grad.addColorStop(1, "#9e8455");
+        } else if (id === 8) {
+          grad.addColorStop(0, "#3d3630");
+          grad.addColorStop(0.6, "#1f1a16");
+          grad.addColorStop(1, "#0a0806");
+        } else {
+          grad.addColorStop(0, ballDef.base);
+          grad.addColorStop(0.65, ballDef.dark);
+          grad.addColorStop(1, "#261a08");
+        }
+      } else if (ballSkin === "MARBLE") {
+        // ROYAL MARBLE: Swirled stone with rich luster
+        if (id === 0) {
+          grad.addColorStop(0, "#ffffff");
+          grad.addColorStop(0.5, "#f0e6ff");
+          grad.addColorStop(1, "#9980b3");
+        } else if (id === 8) {
+          grad.addColorStop(0, "#4a4659");
+          grad.addColorStop(0.5, "#1e1b29");
+          grad.addColorStop(1, "#0a0910");
+        } else {
+          grad.addColorStop(0, ballDef.base);
+          grad.addColorStop(0.6, ballDef.dark);
+          grad.addColorStop(1, "#12081f");
+        }
+      } else if (ballSkin === "OBSIDIAN") {
+        // STEALTH MATTE: Sleek obsidian bodies with glowing neon trims
+        if (id === 0) {
+          grad.addColorStop(0, "#e8f8ff");
+          grad.addColorStop(0.6, "#829ab1");
+          grad.addColorStop(1, "#243b53");
+        } else {
+          grad.addColorStop(0, "#2c2838");
+          grad.addColorStop(0.6, "#14121c");
+          grad.addColorStop(1, "#06050a");
+        }
+      } else if (ballSkin === "GEMSTONE") {
+        // GEMSTONE ESSENCE: Translucent jewel facets
+        if (id === 0) {
+          grad.addColorStop(0, "#ffffff");
+          grad.addColorStop(0.4, "#d8f6ff");
+          grad.addColorStop(1, "#40a0c0");
+        } else if (id === 8) {
+          grad.addColorStop(0, "#604878");
+          grad.addColorStop(0.5, "#251636");
+          grad.addColorStop(1, "#0a0212");
+        } else {
+          grad.addColorStop(0, "#ffffff");
+          grad.addColorStop(0.35, ballDef.base);
+          grad.addColorStop(0.85, ballDef.dark);
+          grad.addColorStop(1, "#100010");
+        }
+      } else {
+        // TOURNAMENT PRO: Classic 32-bit high-gloss resin
+        if (id === 0) {
+          grad.addColorStop(0, "#ffffff");
+          grad.addColorStop(0.65, "#f0f2fa");
+          grad.addColorStop(1, "#c0c8db");
+        } else if (id === 8) {
+          grad.addColorStop(0, "#3c384a");
+          grad.addColorStop(0.5, "#171421");
+          grad.addColorStop(1, "#08060d");
+        } else {
+          grad.addColorStop(0, ballDef.base);
+          grad.addColorStop(0.7, ballDef.dark);
+          grad.addColorStop(1, "#0a0712");
+        }
+      }
 
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, size, size);
@@ -85,38 +158,48 @@ export function bakeBallSprites() {
       // 2. Stripe band (for balls 9-15)
       if (ballDef.stripe) {
         const stripeGrad = ctx.createRadialGradient(cx - 1.8, cy - 1.8, 0.5, cx, cy, radius);
-        stripeGrad.addColorStop(0, "#ffffff");
-        stripeGrad.addColorStop(0.7, "#e1e4ee");
-        stripeGrad.addColorStop(1, "#98a1b5");
+        if (ballSkin === "VINTAGE") {
+          stripeGrad.addColorStop(0, "#fffef5");
+          stripeGrad.addColorStop(0.7, "#ebd9b0");
+          stripeGrad.addColorStop(1, "#8a7348");
+        } else if (ballSkin === "OBSIDIAN") {
+          stripeGrad.addColorStop(0, ballDef.base);
+          stripeGrad.addColorStop(0.7, ballDef.dark);
+          stripeGrad.addColorStop(1, "#0a0512");
+        } else {
+          stripeGrad.addColorStop(0, "#ffffff");
+          stripeGrad.addColorStop(0.7, "#e1e4ee");
+          stripeGrad.addColorStop(1, "#98a1b5");
+        }
 
         ctx.fillStyle = stripeGrad;
-        // Top and bottom white caps
         ctx.fillRect(0, 0, size, 2.8);
         ctx.fillRect(0, size - 2.8, size, 2.8);
       }
 
-      // 3. Center White Number Inlay Disc
+      // 3. Center Number Inlay Disc
       if (id !== 0) {
-        ctx.fillStyle = "#ffffff";
+        const discColor = ballSkin === "MARBLE" ? "#ffd000" : (ballSkin === "VINTAGE" ? "#f5e8c4" : (ballSkin === "OBSIDIAN" ? ballDef.base : "#ffffff"));
+        ctx.fillStyle = discColor;
         ctx.beginPath();
         ctx.arc(cx, cy + 0.2, 2.2, 0, Math.PI * 2);
         ctx.fill();
 
         // Pixel Number inside disc
-        ctx.fillStyle = id === 8 ? "#000000" : "#141026";
+        ctx.fillStyle = (id === 8 || ballSkin === "MARBLE" || ballSkin === "OBSIDIAN") ? "#08060e" : "#141026";
         ctx.font = 'bold 4px monospace';
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(String(id), cx, cy + 0.6);
       } else {
-        // Red Aiming Dot on Cue Ball
-        ctx.fillStyle = "#ff2244";
+        // Aiming Dot on Cue Ball
+        ctx.fillStyle = ballSkin === "NEON" ? "#00f0ff" : (ballSkin === "VINTAGE" ? "#8c2a38" : (ballSkin === "OBSIDIAN" ? "#00ffaa" : "#ff2244"));
         ctx.beginPath();
         ctx.arc(cx, cy, 0.8, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // 4. Specular Highlight Gleam (Sharp 32-bit gloss reflections)
+      // 4. Specular Highlight Gleam
       const specGrad = ctx.createRadialGradient(cx - 2.0, cy - 2.0, 0.1, cx - 2.0, cy - 2.0, 1.8);
       specGrad.addColorStop(0, "rgba(255, 255, 255, 0.95)");
       specGrad.addColorStop(0.4, "rgba(255, 255, 255, 0.5)");
@@ -128,7 +211,7 @@ export function bakeBallSprites() {
       ctx.fill();
 
       // Secondary soft bounce light (bottom-right rim)
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+      ctx.strokeStyle = ballSkin === "NEON" ? "rgba(0, 240, 255, 0.4)" : "rgba(255, 255, 255, 0.18)";
       ctx.lineWidth = 0.6;
       ctx.beginPath();
       ctx.arc(cx, cy, radius - 0.4, 0.25 * Math.PI, 0.75 * Math.PI);

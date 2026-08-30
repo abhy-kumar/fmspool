@@ -1,7 +1,7 @@
 import { CFG, DIFFICULTY } from "../config.js";
 import { PAL } from "../palette.js";
 import { SPRITES } from "../sprites.js";
-import { loadSave, loadSettings } from "../storage.js";
+import { loadSave, loadSettings, COSMETIC_MENU_THEMES } from "../storage.js";
 import { playerRating, getTier } from "../scoring.js";
 import { formatWithDiscriminator } from "../identity.js";
 import { getIsOffline } from "../cloud.js";
@@ -48,7 +48,7 @@ export const titleScene = {
     items.push({ id: "TOURNAMENT", label: "TOURNAMENT CUPS", color: PAL.GOLD });
     items.push({ id: "ACHIEVEMENTS", label: "ACHIEVEMENTS & TROPHIES", color: PAL.YELLOW });
     items.push({ id: "LEADERBOARD", label: "GLOBAL RANKINGS", color: PAL.MAGENTA });
-    items.push({ id: "SETTINGS", label: "PRO SHOP & CUES", color: PAL.GREY });
+    items.push({ id: "SETTINGS", label: "PRO SHOP & CUSTOMIZE", color: PAL.GREY });
     items.push({ id: "HOWTO", label: "HOW TO PLAY", color: PAL.SILVER });
 
     this.menuItems = items;
@@ -71,6 +71,8 @@ export const titleScene = {
 
   render(ctx) {
     const settings = loadSettings();
+    const theme = COSMETIC_MENU_THEMES.find((t) => t.id === (settings.selectedMenuTheme || "DEFAULT")) || COSMETIC_MENU_THEMES[0];
+
     renderRoomBackground(ctx, settings.selectedBg || "DEFAULT");
 
     // Render Drifting 3D Billiard Balls in Background
@@ -98,31 +100,33 @@ export const titleScene = {
     ctx.textBaseline = "middle";
 
     for (let s = 3; s >= 1; s--) {
-      ctx.fillStyle = s >= 2 ? "#420914" : "#801226";
+      ctx.fillStyle = s >= 2 ? (theme.shadow2 || "#420914") : (theme.shadow1 || "#801226");
       ctx.fillText("FMS POOL", logoX + s, logoY + s);
     }
 
-    // Front Face: Metallic Gold Gradient with Chrome Shimmer
-    const goldGrad = ctx.createLinearGradient(0, logoY - 8, 0, logoY + 8);
+    // Front Face: Metallic / Neon Gradient with Shimmer
+    const logoGrad = ctx.createLinearGradient(0, logoY - 8, 0, logoY + 8);
     const shimmerProgress = (this.shimmerTimer % 2.6) / 2.6;
     const isShimmer = shimmerProgress > 0.8 && shimmerProgress < 0.96;
 
     if (isShimmer) {
-      goldGrad.addColorStop(0, "#ffffff");
-      goldGrad.addColorStop(0.5, "#fff3b3");
-      goldGrad.addColorStop(1, "#ffd000");
+      const sg = theme.shimmerGrad || ["#ffffff", "#fff3b3", "#ffd000"];
+      logoGrad.addColorStop(0, sg[0]);
+      logoGrad.addColorStop(0.5, sg[1]);
+      logoGrad.addColorStop(1, sg[2]);
     } else {
-      goldGrad.addColorStop(0, "#fff5b8");
-      goldGrad.addColorStop(0.4, "#ffd000");
-      goldGrad.addColorStop(0.8, "#d49b00");
-      goldGrad.addColorStop(1, "#8a6000");
+      const lg = theme.logoGrad || ["#fff5b8", "#ffd000", "#d49b00", "#8a6000"];
+      logoGrad.addColorStop(0, lg[0]);
+      logoGrad.addColorStop(0.4, lg[1]);
+      logoGrad.addColorStop(0.8, lg[2]);
+      logoGrad.addColorStop(1, lg[3]);
     }
 
-    ctx.fillStyle = goldGrad;
+    ctx.fillStyle = logoGrad;
     ctx.fillText("FMS POOL", logoX, logoY);
 
     // Subtitle Banner
-    ctx.fillStyle = PAL.CYAN;
+    ctx.fillStyle = theme.accentColor || PAL.CYAN;
     ctx.font = '8px "Press Start 2P", monospace';
     ctx.fillText("CLASSIC 8-BALL BILLIARDS", logoX, logoY + 18);
 
@@ -151,7 +155,7 @@ export const titleScene = {
       ctx.fillStyle = isSelected ? "#2d2454" : "#191430";
       ctx.fillRect(bx, by, btnW, btnH);
 
-      ctx.strokeStyle = isSelected ? PAL.CYAN : "#3c3363";
+      ctx.strokeStyle = isSelected ? (theme.accentColor || PAL.CYAN) : (theme.panelBorder || "#3c3363");
       ctx.lineWidth = isSelected ? 1.5 : 1;
       ctx.strokeRect(bx, by, btnW, btnH);
 

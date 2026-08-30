@@ -1,9 +1,22 @@
 import { CFG } from "../config.js";
 import { PAL } from "../palette.js";
-import { loadSettings, saveSettings, loadSave, resetAllProgress, COSMETIC_CUES, COSMETIC_FELTS, COSMETIC_BACKGROUNDS, saveImmediate } from "../storage.js";
+import {
+  loadSettings,
+  saveSettings,
+  loadSave,
+  resetAllProgress,
+  COSMETIC_CUES,
+  COSMETIC_FELTS,
+  COSMETIC_TABLES,
+  COSMETIC_BALLS,
+  COSMETIC_MENU_THEMES,
+  COSMETIC_BACKGROUNDS,
+  saveImmediate,
+  unlockAchievement,
+} from "../storage.js";
 import { renderPanel, renderButton } from "../ui.js";
 import { renderCRTEffect, renderRoomBackground } from "../render.js";
-import { bakeFelt, bakeCueStick } from "../sprites.js";
+import { bakeFelt, bakeCueStick, bakeBallSprites, SPRITES } from "../sprites.js";
 import { go } from "../sceneManager.js";
 import { audio } from "../audio.js";
 
@@ -29,10 +42,13 @@ export const settingsScene = {
   name: "settings",
   settings: null,
   backBtn: { x: 12, y: 10, w: 60, h: 20 },
-  cosmeticTab: "CUES", // 'CUES' | 'FELTS' | 'BACKGROUNDS'
+  cosmeticTab: "CUES", // 'CUES' | 'FELTS' | 'TABLES' | 'BALLS' | 'BACKGROUNDS' | 'MENU'
   previewCueIdx: 0,
   previewFeltIdx: 0,
+  previewTableIdx: 0,
+  previewBallIdx: 0,
   previewBgIdx: 0,
+  previewThemeIdx: 0,
   resetConfirmOpen: false,
   resetInput: "",
 
@@ -44,7 +60,10 @@ export const settingsScene = {
 
     this.previewCueIdx = Math.max(0, COSMETIC_CUES.findIndex((c) => c.id === this.settings.selectedCue));
     this.previewFeltIdx = Math.max(0, COSMETIC_FELTS.findIndex((f) => f.id === this.settings.selectedFelt));
+    this.previewTableIdx = Math.max(0, COSMETIC_TABLES.findIndex((t) => t.id === (this.settings.selectedTable || "DEFAULT")));
+    this.previewBallIdx = Math.max(0, COSMETIC_BALLS.findIndex((b) => b.id === (this.settings.selectedBall || "DEFAULT")));
     this.previewBgIdx = Math.max(0, COSMETIC_BACKGROUNDS.findIndex((b) => b.id === (this.settings.selectedBg || "DEFAULT")));
+    this.previewThemeIdx = Math.max(0, COSMETIC_MENU_THEMES.findIndex((m) => m.id === (this.settings.selectedMenuTheme || "DEFAULT")));
   },
 
   exit() {
@@ -60,21 +79,21 @@ export const settingsScene = {
       : (this.settings.selectedBg || "DEFAULT");
     renderRoomBackground(ctx, activeBgToRender);
 
-    // Dark tint plate (slightly lighter 0.78 so room atmosphere is clear)
+    // Dark tint plate
     ctx.fillStyle = "rgba(10, 8, 20, 0.78)";
     ctx.fillRect(0, 0, CFG.BASE_W, CFG.BASE_H);
 
     // Top Header
     renderButton(ctx, this.backBtn, "< BACK", false);
 
-    const isFs = !!document.fullscreenElement;
-    renderButton(ctx, { x: 400, y: 10, w: 100, h: 20 }, isFs ? "WINDOWED" : "FULLSCREEN", false);
+    const isFs = !document.fullscreenElement;
+    renderButton(ctx, { x: 400, y: 10, w: 100, h: 20 }, isFs ? "FULLSCREEN" : "WINDOWED", false);
 
     ctx.fillStyle = PAL.WHITE;
     ctx.font = '8px "Press Start 2P", monospace';
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("SETTINGS & COSMETICS", 256, 20);
+    ctx.fillText("SETTINGS & PRO SHOP", 256, 20);
 
     const s = this.settings;
     const save = loadSave();
@@ -131,16 +150,21 @@ export const settingsScene = {
     ctx.font = '7px "Press Start 2P", monospace';
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
-    ctx.fillText(`COINS: ${save.coins || 0}`, 484, 56);
+    ctx.fillText(`COINS: ${save.coins || 0}`, 484, 54);
 
-    // Category Tabs: [CUES] [FELTS] [ROOMS]
+    // Category Tabs: 2 Rows of 3 buttons
     const tabW = 68;
-    const tabH = 18;
-    const tabY = 68;
+    const tabH = 16;
+    const tabY1 = 64;
+    const tabY2 = 82;
 
-    renderButton(ctx, { x: 274, y: tabY, w: tabW, h: tabH }, "CUES", this.cosmeticTab === "CUES");
-    renderButton(ctx, { x: 346, y: tabY, w: tabW, h: tabH }, "FELTS", this.cosmeticTab === "FELTS");
-    renderButton(ctx, { x: 418, y: tabY, w: tabW, h: tabH }, "ROOMS", this.cosmeticTab === "BACKGROUNDS");
+    renderButton(ctx, { x: 272, y: tabY1, w: tabW, h: tabH }, "CUES", this.cosmeticTab === "CUES");
+    renderButton(ctx, { x: 344, y: tabY1, w: tabW, h: tabH }, "FELTS", this.cosmeticTab === "FELTS");
+    renderButton(ctx, { x: 416, y: tabY1, w: tabW, h: tabH }, "TABLES", this.cosmeticTab === "TABLES");
+
+    renderButton(ctx, { x: 272, y: tabY2, w: tabW, h: tabH }, "BALLS", this.cosmeticTab === "BALLS");
+    renderButton(ctx, { x: 344, y: tabY2, w: tabW, h: tabH }, "ROOMS", this.cosmeticTab === "BACKGROUNDS");
+    renderButton(ctx, { x: 416, y: tabY2, w: tabW, h: tabH }, "MENU", this.cosmeticTab === "MENU");
 
     // Active Item Display Card
     let curList = COSMETIC_CUES;
@@ -153,52 +177,133 @@ export const settingsScene = {
       curIdx = this.previewFeltIdx;
       unlockKey = "felts";
       activeKey = s.selectedFelt;
+    } else if (this.cosmeticTab === "TABLES") {
+      curList = COSMETIC_TABLES;
+      curIdx = this.previewTableIdx;
+      unlockKey = "tables";
+      activeKey = s.selectedTable || "DEFAULT";
+    } else if (this.cosmeticTab === "BALLS") {
+      curList = COSMETIC_BALLS;
+      curIdx = this.previewBallIdx;
+      unlockKey = "balls";
+      activeKey = s.selectedBall || "DEFAULT";
     } else if (this.cosmeticTab === "BACKGROUNDS") {
       curList = COSMETIC_BACKGROUNDS;
       curIdx = this.previewBgIdx;
       unlockKey = "backgrounds";
       activeKey = s.selectedBg || "DEFAULT";
+    } else if (this.cosmeticTab === "MENU") {
+      curList = COSMETIC_MENU_THEMES;
+      curIdx = this.previewThemeIdx;
+      unlockKey = "menuThemes";
+      activeKey = s.selectedMenuTheme || "DEFAULT";
     }
 
-    const item = curList[curIdx];
+    const item = curList[curIdx] || curList[0];
     const isUnlocked = save.unlocks[unlockKey] && save.unlocks[unlockKey].includes(item.id);
     const isEquipped = activeKey === item.id;
 
     // Item Name Banner
     ctx.fillStyle = PAL.WHITE;
-    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.font = '7px "Press Start 2P", monospace';
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(item.name, 380, 102);
+    ctx.fillText(item.name, 380, 108);
 
     // Item Cost / Status
     if (isEquipped) {
       ctx.fillStyle = PAL.GREEN;
       ctx.font = '7px "Press Start 2P", monospace';
-      ctx.fillText("[ EQUIPPED ]", 380, 118);
+      ctx.fillText("[ EQUIPPED ]", 380, 122);
     } else if (isUnlocked) {
       ctx.fillStyle = PAL.CYAN;
       ctx.font = '7px "Press Start 2P", monospace';
-      ctx.fillText("[ OWNED ]", 380, 118);
+      ctx.fillText("[ OWNED ]", 380, 122);
     } else {
       ctx.fillStyle = PAL.YELLOW;
       ctx.font = '7px "Press Start 2P", monospace';
-      ctx.fillText(`COST: ${item.cost} COINS`, 380, 118);
+      ctx.fillText(`COST: ${item.cost} COINS`, 380, 122);
+    }
+
+    // Visual Preview Swatch Box (x=274, y=134, w=212, h=30)
+    ctx.fillStyle = PAL.DARKEST;
+    ctx.fillRect(274, 134, 212, 30);
+    ctx.strokeStyle = PAL.SLATE;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(274, 134, 212, 30);
+
+    if (this.cosmeticTab === "FELTS") {
+      // Felt Color Swatch
+      ctx.fillStyle = item.color;
+      ctx.fillRect(280, 139, 200, 20);
+      ctx.strokeStyle = item.light;
+      ctx.strokeRect(280, 139, 200, 20);
+    } else if (this.cosmeticTab === "TABLES") {
+      // Table Rail Wood Swatch with Diamond Sights
+      const woodGrad = ctx.createLinearGradient(280, 139, 480, 159);
+      woodGrad.addColorStop(0, item.railLight);
+      woodGrad.addColorStop(0.5, item.railColor);
+      woodGrad.addColorStop(1, item.railDark);
+      ctx.fillStyle = woodGrad;
+      ctx.fillRect(280, 139, 200, 20);
+      ctx.strokeStyle = item.railHi;
+      ctx.strokeRect(280, 139, 200, 20);
+
+      // Inlaid diamonds
+      [320, 380, 440].forEach((dx) => {
+        ctx.fillStyle = item.diamondColor;
+        ctx.fillRect(dx - 2, 147, 5, 5);
+        ctx.fillStyle = item.diamondLight || "#ffffff";
+        ctx.fillRect(dx - 1, 148, 3, 3);
+      });
+    } else if (this.cosmeticTab === "BALLS") {
+      // Live 3D Ball Set Preview (Cue, 1-Solid, 8-Ball, 9-Stripe)
+      const ballIds = [0, 1, 8, 9];
+      ballIds.forEach((bId, i) => {
+        const bx = 310 + i * 46;
+        const by = 149;
+        if (SPRITES.ballShadow) {
+          ctx.drawImage(SPRITES.ballShadow, bx - 7, by - 1);
+        }
+        const sprite = SPRITES.balls[bId] ? SPRITES.balls[bId][0] : null;
+        if (sprite) {
+          ctx.drawImage(sprite, bx - 6, by - 6);
+        }
+      });
+    } else if (this.cosmeticTab === "MENU") {
+      // Menu Theme Banner Swatch
+      const lg = item.logoGrad || ["#ffd000", "#d49b00"];
+      const tGrad = ctx.createLinearGradient(280, 139, 480, 159);
+      tGrad.addColorStop(0, lg[0]);
+      tGrad.addColorStop(1, lg[1]);
+      ctx.fillStyle = tGrad;
+      ctx.fillRect(280, 139, 200, 20);
+      ctx.strokeStyle = item.accentColor;
+      ctx.strokeRect(280, 139, 200, 20);
+
+      ctx.fillStyle = item.shadow1 || "#000000";
+      ctx.font = 'bold 7px "Press Start 2P", monospace';
+      ctx.textAlign = "center";
+      ctx.fillText("THEME ACCENT", 380, 149);
+    } else if (this.cosmeticTab === "CUES") {
+      if (SPRITES.cue) {
+        ctx.drawImage(SPRITES.cue, 350, 146);
+      }
     }
 
     // Item Description (Wrapped with clean 6px font)
     ctx.fillStyle = PAL.SILVER;
     ctx.font = '6px "Press Start 2P", monospace';
     const descLines = wrapText(item.desc || (item.name + " theme"), 30);
-    if (descLines[0]) ctx.fillText(descLines[0], 380, 136);
-    if (descLines[1]) ctx.fillText(descLines[1], 380, 148);
+    if (descLines[0]) ctx.fillText(descLines[0], 380, 174);
+    if (descLines[1]) ctx.fillText(descLines[1], 380, 184);
 
     // Navigation Controls (< PREV | NEXT >)
-    renderButton(ctx, { x: 274, y: 166, w: 96, h: 22 }, "< PREV", false);
-    renderButton(ctx, { x: 390, y: 166, w: 96, h: 22 }, "NEXT >", false);
+    renderButton(ctx, { x: 274, y: 194, w: 96, h: 20 }, "< PREV", false);
+    renderButton(ctx, { x: 390, y: 194, w: 96, h: 20 }, "NEXT >", false);
 
     // Main Action Button (BUY / EQUIP / ACTIVE)
-    const actionBtnRect = { x: 274, y: 198, w: 212, h: 26 };
+    const actionBtnRect = { x: 274, y: 220, w: 212, h: 24 };
     if (!isUnlocked) {
       const canAfford = (save.coins || 0) >= item.cost;
       renderButton(ctx, actionBtnRect, canAfford ? `BUY ITEM (${item.cost} C)` : "NEED MORE COINS", false);
@@ -206,10 +311,10 @@ export const settingsScene = {
       renderButton(ctx, actionBtnRect, "EQUIP ITEM", false);
     } else {
       ctx.fillStyle = PAL.GREEN;
-      ctx.font = '8px "Press Start 2P", monospace';
+      ctx.font = '7px "Press Start 2P", monospace';
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("[ CURRENTLY ACTIVE ]", 380, 211);
+      ctx.fillText("[ CURRENTLY ACTIVE ]", 380, 232);
     }
 
     // 3. Reset Confirmation Modal
@@ -358,19 +463,35 @@ export const settingsScene = {
       return;
     }
 
-    // Tab Switches (y = 68..86)
-    const tabY = 68;
-    if (e.y >= tabY && e.y <= tabY + 18) {
-      if (e.x >= 274 && e.x <= 342) {
+    // Tab Switches Row 1 (y = 64..80)
+    if (e.y >= 64 && e.y <= 80) {
+      if (e.x >= 272 && e.x <= 340) {
         this.cosmeticTab = "CUES";
         audio.playSfx("uiSelect");
         return;
-      } else if (e.x >= 346 && e.x <= 414) {
+      } else if (e.x >= 344 && e.x <= 412) {
         this.cosmeticTab = "FELTS";
         audio.playSfx("uiSelect");
         return;
-      } else if (e.x >= 418 && e.x <= 486) {
+      } else if (e.x >= 416 && e.x <= 484) {
+        this.cosmeticTab = "TABLES";
+        audio.playSfx("uiSelect");
+        return;
+      }
+    }
+
+    // Tab Switches Row 2 (y = 82..98)
+    if (e.y >= 82 && e.y <= 98) {
+      if (e.x >= 272 && e.x <= 340) {
+        this.cosmeticTab = "BALLS";
+        audio.playSfx("uiSelect");
+        return;
+      } else if (e.x >= 344 && e.x <= 412) {
         this.cosmeticTab = "BACKGROUNDS";
+        audio.playSfx("uiSelect");
+        return;
+      } else if (e.x >= 416 && e.x <= 484) {
+        this.cosmeticTab = "MENU";
         audio.playSfx("uiSelect");
         return;
       }
@@ -385,29 +506,47 @@ export const settingsScene = {
       curList = COSMETIC_FELTS;
       propIdxName = "previewFeltIdx";
       unlockKey = "felts";
+    } else if (this.cosmeticTab === "TABLES") {
+      curList = COSMETIC_TABLES;
+      propIdxName = "previewTableIdx";
+      unlockKey = "tables";
+    } else if (this.cosmeticTab === "BALLS") {
+      curList = COSMETIC_BALLS;
+      propIdxName = "previewBallIdx";
+      unlockKey = "balls";
     } else if (this.cosmeticTab === "BACKGROUNDS") {
       curList = COSMETIC_BACKGROUNDS;
       propIdxName = "previewBgIdx";
       unlockKey = "backgrounds";
+    } else if (this.cosmeticTab === "MENU") {
+      curList = COSMETIC_MENU_THEMES;
+      propIdxName = "previewThemeIdx";
+      unlockKey = "menuThemes";
     }
 
-    // Prev Button (x=274, y=166, w=96, h=22)
-    if (e.x >= 274 && e.x <= 370 && e.y >= 166 && e.y <= 188) {
+    // Prev Button (x=274, y=194, w=96, h=20)
+    if (e.x >= 274 && e.x <= 370 && e.y >= 194 && e.y <= 214) {
       this[propIdxName] = (this[propIdxName] - 1 + curList.length) % curList.length;
+      if (this.cosmeticTab === "BALLS") {
+        bakeBallSprites(curList[this[propIdxName]].id);
+      }
       audio.playSfx("uiMove");
       return;
     }
 
-    // Next Button (x=390, y=166, w=96, h=22)
-    if (e.x >= 390 && e.x <= 486 && e.y >= 166 && e.y <= 188) {
+    // Next Button (x=390, y=194, w=96, h=20)
+    if (e.x >= 390 && e.x <= 486 && e.y >= 194 && e.y <= 214) {
       this[propIdxName] = (this[propIdxName] + 1) % curList.length;
+      if (this.cosmeticTab === "BALLS") {
+        bakeBallSprites(curList[this[propIdxName]].id);
+      }
       audio.playSfx("uiMove");
       return;
     }
 
-    // Action Button (x=274, y=198, w=212, h=26)
-    if (e.x >= 274 && e.x <= 486 && e.y >= 198 && e.y <= 224) {
-      const curItem = curList[this[propIdxName]];
+    // Action Button (x=274, y=220, w=212, h=24)
+    if (e.x >= 274 && e.x <= 486 && e.y >= 220 && e.y <= 244) {
+      const curItem = curList[this[propIdxName]] || curList[0];
       const isUnlocked = save.unlocks[unlockKey] && save.unlocks[unlockKey].includes(curItem.id);
 
       if (!isUnlocked) {
@@ -425,11 +564,33 @@ export const settingsScene = {
           } else if (this.cosmeticTab === "FELTS") {
             s.selectedFelt = curItem.id;
             bakeFelt(curItem.color, curItem.light, curItem.dark);
+          } else if (this.cosmeticTab === "TABLES") {
+            s.selectedTable = curItem.id;
+          } else if (this.cosmeticTab === "BALLS") {
+            s.selectedBall = curItem.id;
+            bakeBallSprites(curItem.id);
           } else if (this.cosmeticTab === "BACKGROUNDS") {
             s.selectedBg = curItem.id;
+          } else if (this.cosmeticTab === "MENU") {
+            s.selectedMenuTheme = curItem.id;
           }
           saveSettings(s);
           audio.playSfx("uiSelect");
+
+          // Check customizer achievements
+          if (
+            (save.unlocks.cues || []).length >= 3 &&
+            (save.unlocks.felts || []).length >= 3
+          ) {
+            unlockAchievement("KABHI_KHUSHI");
+          }
+          if (
+            (save.unlocks.menuThemes || []).length >= 2 &&
+            (save.unlocks.balls || []).length >= 2 &&
+            (save.unlocks.tables || []).length >= 2
+          ) {
+            unlockAchievement("STYLE_ICON");
+          }
         } else {
           audio.playSfx("foul");
         }
@@ -441,8 +602,15 @@ export const settingsScene = {
         } else if (this.cosmeticTab === "FELTS") {
           s.selectedFelt = curItem.id;
           bakeFelt(curItem.color, curItem.light, curItem.dark);
+        } else if (this.cosmeticTab === "TABLES") {
+          s.selectedTable = curItem.id;
+        } else if (this.cosmeticTab === "BALLS") {
+          s.selectedBall = curItem.id;
+          bakeBallSprites(curItem.id);
         } else if (this.cosmeticTab === "BACKGROUNDS") {
           s.selectedBg = curItem.id;
+        } else if (this.cosmeticTab === "MENU") {
+          s.selectedMenuTheme = curItem.id;
         }
         saveSettings(s);
         audio.playSfx("uiSelect");
@@ -462,19 +630,27 @@ export const settingsScene = {
       if (e.code === "Backspace") {
         this.resetInput = this.resetInput.slice(0, -1);
         audio.playSfx("keyPress");
+      } else if (e.code === "Enter") {
+        if (this.resetInput.trim().toUpperCase() === "RESET") {
+          audio.playSfx("foul");
+          resetAllProgress();
+          this.resetConfirmOpen = false;
+          this.resetInput = "";
+          go("title");
+        }
       } else if (e.code === "Escape") {
         this.resetConfirmOpen = false;
         this.resetInput = "";
-      } else if (e.key && e.key.length === 1 && /[a-zA-Z]/.test(e.key)) {
-        if (this.resetInput.length < 8) {
-          this.resetInput += e.key.toUpperCase();
-          audio.playSfx("keyPress");
-        }
+        audio.playSfx("uiSelect");
+      } else if (e.key && e.key.length === 1 && this.resetInput.length < 10) {
+        this.resetInput += e.key.toUpperCase();
+        audio.playSfx("keyPress");
       }
       return;
     }
 
     if (e.code === "Escape") {
+      audio.playSfx("uiSelect");
       saveSettings(this.settings);
       go("title");
     }

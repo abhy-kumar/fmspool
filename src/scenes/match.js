@@ -301,6 +301,7 @@ export const matchScene = {
 
     const dir = fromAngle(shot.angle);
     const speed = shot.power * CFG.POWER_TO_SPEED;
+    this.initialCuePos = { x: cue.x, y: cue.y };
     cue.vx = dir.x * speed;
     cue.vy = dir.y * speed;
     cue.spin = { ...shot.spin };
@@ -331,6 +332,26 @@ export const matchScene = {
         const ach = unlockAchievement("DHONI_FINISH");
         if (ach) this.showAchievementToast(ach);
       }
+      if (this.shotReport.pocketed.some((p) => p.ball.id !== 0 && (this.shotReport.cushionBeforeContact || this.shotReport.objectBallHitCushion))) {
+        const ach = unlockAchievement("KICK_MASTER");
+        if (ach) this.showAchievementToast(ach);
+      }
+      if (this.shotReport.ballHits >= 2 && this.shotReport.pocketed.some((p) => p.ball.id !== 0 && p.ball.id !== this.shotReport.firstContact)) {
+        const ach = unlockAchievement("COMBO_KING");
+        if (ach) this.showAchievementToast(ach);
+      }
+      if (this.shotReport.eightOnBreak >= 1 || (this.state.isBreakShot && eightPotted)) {
+        const ach = unlockAchievement("GOLDEN_BREAK");
+        if (ach) this.showAchievementToast(ach);
+      }
+      if (this.initialCuePos && this.shotReport.pocketed.some((p) => p.ball.id !== 0 && dist(this.initialCuePos, p.ball) >= 280)) {
+        const ach = unlockAchievement("LONG_SNIPER");
+        if (ach) this.showAchievementToast(ach);
+      }
+      if (eightPotted && this.initialCuePos && dist(this.initialCuePos, this.state.balls[8]) >= 300) {
+        const ach = unlockAchievement("DILWALE_CORNER");
+        if (ach) this.showAchievementToast(ach);
+      }
     }
 
     if (this.state.phase === "GAME_OVER") {
@@ -343,6 +364,9 @@ export const matchScene = {
   async handleGameOver() {
     clearMatchSnapshot();
     const won = this.state.winner === "PLAYER";
+    const yourBallsLeft = countRemaining(this.state.balls, this.state.groups.PLAYER);
+    const oppBallsLeft = countRemaining(this.state.balls, this.state.groups.AI);
+
     if (won) {
       audio.playTrack("VICTORY");
       if (this.difficultyId === "PRO" || this.difficultyId === "LEGEND") {
@@ -353,12 +377,29 @@ export const matchScene = {
         const ach = unlockAchievement("MR_INDIA");
         if (ach) this.showAchievementToast(ach);
       }
+      if ((Date.now() - this.state.startedAt) <= 90000) {
+        const ach = unlockAchievement("SPEED_DEMON");
+        if (ach) this.showAchievementToast(ach);
+      }
+      if (oppBallsLeft === 7) {
+        const ach = unlockAchievement("WHITEWASH");
+        if (ach) this.showAchievementToast(ach);
+      }
+      if (this.opponentName === "GABBAR") {
+        const ach = unlockAchievement("GABBAR_DEFEAT");
+        if (ach) this.showAchievementToast(ach);
+      }
+      if (this.state.stats.PLAYER.tableRun) {
+        const ach = unlockAchievement("BIG_LEBOWSKI");
+        if (ach) this.showAchievementToast(ach);
+      }
+      if (oppBallsLeft - yourBallsLeft >= 3) {
+        const ach = unlockAchievement("GULLY_BOY");
+        if (ach) this.showAchievementToast(ach);
+      }
     } else {
       audio.playTrack("DEFEAT");
     }
-
-    const yourBallsLeft = countRemaining(this.state.balls, this.state.groups.PLAYER);
-    const oppBallsLeft = countRemaining(this.state.balls, this.state.groups.AI);
 
     const res = matchScore(
       this.state.stats.PLAYER,
@@ -393,6 +434,21 @@ export const matchScene = {
     save.career.bestRunScore = Math.max(save.career.bestRunScore || 0, res.score || 0);
     save.career.runsPlayed++;
     save.coins = (save.coins || 0) + this.resultsData.coinsEarned;
+
+    // Check career milestones achievements
+    if (save.career.matchesWon >= 10) {
+      unlockAchievement("CENTURY_CLUB");
+    }
+    if ((save.coins || 0) >= 1000) {
+      unlockAchievement("HIGH_ROLLER");
+    }
+    if (
+      (save.unlocks.menuThemes || []).length >= 2 &&
+      (save.unlocks.balls || []).length >= 2 &&
+      (save.unlocks.tables || []).length >= 2
+    ) {
+      unlockAchievement("STYLE_ICON");
+    }
 
     // Advance Tournament Bracket if in tournament mode
     if (this.tournamentBracket) {
@@ -444,7 +500,7 @@ export const matchScene = {
     renderRoomBackground(ctx, settings.selectedBg || "DEFAULT");
 
     // 1. Render Pool Table & Pockets
-    renderTable(ctx);
+    renderTable(ctx, settings.selectedTable || "DEFAULT");
 
     // 2. Render Balls with halos
     renderBalls(ctx, this.state.balls, this.state);

@@ -52,6 +52,9 @@ export function createShotReport() {
     firstContact: null,
     cushionsAfterContact: 0,
     cushionsTotal: 0,
+    cushionBeforeContact: false,
+    objectBallHitCushion: false,
+    ballHits: 0,
     pocketed: [], // [{ ball, pocket }]
     cueScratched: false,
     ballsOffTable: [],
@@ -106,6 +109,7 @@ export function isBallLegalFirstContact(ballId, state, shooter = null) {
 export function processPhysicsEvents(report, events, state) {
   events.forEach((ev) => {
     if (ev.type === "ballHit") {
+      report.ballHits++;
       const isCue = ev.a.id === 0 || ev.b.id === 0;
       if (isCue && report.firstContact === null) {
         const objectBall = ev.a.id === 0 ? ev.b : ev.a;
@@ -113,9 +117,14 @@ export function processPhysicsEvents(report, events, state) {
       }
     } else if (ev.type === "cushion") {
       report.cushionsTotal++;
-      if (report.firstContact !== null) {
+      if (report.firstContact === null) {
+        report.cushionBeforeContact = true;
+      } else {
         report.cushionsAfterContact++;
         report.anyBallHitCushionAfterContact = true;
+        if (ev.ball.id !== 0) {
+          report.objectBallHitCushion = true;
+        }
       }
       if (state.isBreakShot && ev.ball.id !== 0) {
         report.breakCushionBalls.add(ev.ball.id);

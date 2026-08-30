@@ -1,6 +1,6 @@
 import { CFG } from "../config.js";
 import { PAL } from "../palette.js";
-import { bakeAllSprites, bakeCueStick, bakeFelt } from "../sprites.js";
+import { bakeAllSprites, bakeCueStick, bakeFelt, bakeBallSprites } from "../sprites.js";
 import { loadSave, loadSettings, COSMETIC_FELTS } from "../storage.js";
 import { flushOutbox } from "../cloud.js";
 import { go } from "../sceneManager.js";
@@ -33,6 +33,9 @@ export const bootScene = {
       if (settings.selectedFelt) {
         const curFelt = COSMETIC_FELTS.find((f) => f.id === settings.selectedFelt);
         if (curFelt) bakeFelt(curFelt.color, curFelt.light, curFelt.dark);
+      }
+      if (settings.selectedBall) {
+        bakeBallSprites(settings.selectedBall);
       }
     } catch (e) {
       console.error("[Boot] Error loading saves/settings:", e);

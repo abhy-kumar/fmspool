@@ -5,7 +5,7 @@ import { POCKETS } from "./table.js";
 import { isBallLegalFirstContact, getBallGroup } from "./rules.js";
 import { norm, mul, add, sub, perp, dot, dist, clamp } from "./vec.js";
 
-import { COSMETIC_BACKGROUNDS } from "./storage.js";
+import { COSMETIC_BACKGROUNDS, COSMETIC_TABLES } from "./storage.js";
 
 // Physics <-> Base Pixel coordinate conversions
 export function physToPx(x, y) {
@@ -88,13 +88,15 @@ export function renderRoomBackground(ctx, bgId = "DEFAULT") {
   }
 }
 
-// Render complete 32-bit luxury pool table
-export function renderTable(ctx) {
+// Render complete 32-bit luxury pool table with customizable Rails & Hardware
+export function renderTable(ctx, tableSkinId = "DEFAULT") {
   const px = CFG.PLAYFIELD_PX.x;
   const py = CFG.PLAYFIELD_PX.y;
   const pw = CFG.PLAYFIELD_PX.w;
   const ph = CFG.PLAYFIELD_PX.h;
   const rw = CFG.RAIL_PX;
+
+  const tableDef = COSMETIC_TABLES.find((t) => t.id === tableSkinId) || COSMETIC_TABLES[0];
 
   const tableLeft = px - rw;
   const tableTop = py - rw;
@@ -102,25 +104,25 @@ export function renderTable(ctx) {
   const tableHeight = ph + rw * 2;
 
   // 1. Table Outer Drop Shadow
-  ctx.fillStyle = "rgba(4, 3, 8, 0.65)";
+  ctx.fillStyle = tableDef.dropShadow || "rgba(4, 3, 8, 0.65)";
   ctx.fillRect(tableLeft + 4, tableTop + 4, tableWidth, tableHeight);
 
-  // 2. Rich Mahogany Wood Rails (Gradient bevel)
+  // 2. Hardwood Wood Rails (Gradient bevel)
   const woodGrad = ctx.createLinearGradient(tableLeft, tableTop, tableLeft, tableTop + tableHeight);
-  woodGrad.addColorStop(0, PAL.RAIL_LIGHT);
-  woodGrad.addColorStop(0.5, PAL.RAIL);
-  woodGrad.addColorStop(1, PAL.RAIL_DARK);
+  woodGrad.addColorStop(0, tableDef.railLight);
+  woodGrad.addColorStop(0.5, tableDef.railColor);
+  woodGrad.addColorStop(1, tableDef.railDark);
 
   ctx.fillStyle = woodGrad;
   ctx.fillRect(tableLeft, tableTop, tableWidth, tableHeight);
 
-  // Polished Rosewood outer bevel lip
-  ctx.strokeStyle = PAL.RAIL_HI;
+  // Polished outer bevel lip
+  ctx.strokeStyle = tableDef.railHi;
   ctx.lineWidth = 1.5;
   ctx.strokeRect(tableLeft + 1, tableTop + 1, tableWidth - 2, tableHeight - 2);
 
   // Inner Cushion Shadow Band
-  ctx.strokeStyle = PAL.RAIL_DARKEST;
+  ctx.strokeStyle = tableDef.railDarkest;
   ctx.lineWidth = 2;
   ctx.strokeRect(tableLeft + 3, tableTop + 3, tableWidth - 6, tableHeight - 6);
 
@@ -160,17 +162,17 @@ export function renderTable(ctx) {
   const headSpotPx = physToPx(CFG.HEAD_SPOT.x, CFG.HEAD_SPOT.y);
   const footSpotPx = physToPx(CFG.FOOT_SPOT.x, CFG.FOOT_SPOT.y);
 
-  // Inlaid brass spots
-  ctx.fillStyle = PAL.GOLD;
+  // Inlaid brass / diamond spots
+  ctx.fillStyle = tableDef.diamondColor || PAL.GOLD;
   ctx.fillRect(Math.round(headSpotPx.x - 1), Math.round(headSpotPx.y - 1), 3, 3);
   ctx.fillRect(Math.round(footSpotPx.x - 1), Math.round(footSpotPx.y - 1), 3, 3);
 
-  // 5. Polished Mother-of-Pearl / Gold Diamond Sights
+  // 5. Polished Diamond Sights
   const drawDiamond = (dx, dy) => {
-    ctx.fillStyle = PAL.GOLD_LIGHT;
+    ctx.fillStyle = tableDef.diamondColor || PAL.GOLD_LIGHT;
     ctx.fillRect(Math.round(dx), Math.round(dy - 1), 1, 3);
     ctx.fillRect(Math.round(dx - 1), Math.round(dy), 3, 1);
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = tableDef.diamondLight || "#ffffff";
     ctx.fillRect(Math.round(dx), Math.round(dy), 1, 1);
   };
 
@@ -199,13 +201,13 @@ export function renderTable(ctx) {
     drawDiamond(px + pw + 7, dy);
   });
 
-  // 6. Leather Pocket Drop Wells & Brass Corner Castings
+  // 6. Leather Pocket Drop Wells & Corner Castings
   POCKETS.forEach((p) => {
     const pos = physToPx(p.x, p.y);
     const radius = p.r * CFG.PHYS_TO_PX;
 
-    // Brass corner lip
-    ctx.strokeStyle = PAL.GOLD_DARK;
+    // Corner casting ring
+    ctx.strokeStyle = tableDef.diamondColor || PAL.GOLD_DARK;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(Math.round(pos.x), Math.round(pos.y), radius + 1.5, 0, Math.PI * 2);
